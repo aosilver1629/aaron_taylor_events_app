@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign up for event texts — SF Activities</title>
+<style>
+  :root { --ink:#1a1a1a; --muted:#5a5a5a; --rule:#e0ddd6; --bg:#fdfcfa; --panel:#f1efe9; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding:3rem 1.5rem 5rem;
+    background:var(--bg); color:var(--ink);
+    font:16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  main { max-width:34rem; margin:0 auto; }
+  h1 { font-size:1.5rem; line-height:1.25; margin:0 0 .5rem; letter-spacing:-.01em; }
+  .lede { color:var(--muted); margin:0 0 2rem; padding-bottom:1.5rem;
+          border-bottom:1px solid var(--rule); }
+  label { display:block; font-weight:600; font-size:.9rem; margin-bottom:.4rem; }
+  input[type="tel"] {
+    width:100%; padding:.7rem .8rem; font-size:1rem; font-family:inherit;
+    border:1px solid #c9c4b8; border-radius:4px; background:#fff; color:var(--ink);
+  }
+  input[type="tel"]:focus, button:focus-visible, input[type="checkbox"]:focus-visible {
+    outline:2px solid #1a1a1a; outline-offset:2px;
+  }
+  .consent {
+    display:flex; gap:.7rem; align-items:flex-start;
+    background:var(--panel); border-left:3px solid #c9c4b8;
+    padding:1rem 1.1rem; margin:1.5rem 0;
+  }
+  .consent input { margin-top:.3rem; flex-shrink:0; width:1.05rem; height:1.05rem; }
+  .consent span { font-size:.9rem; line-height:1.55; }
+  button {
+    width:100%; padding:.8rem; font-size:1rem; font-family:inherit; font-weight:600;
+    background:var(--ink); color:#fff; border:0; border-radius:4px; cursor:pointer;
+  }
+  button:disabled { background:#b8b3a8; cursor:not-allowed; }
+  .note { font-size:.85rem; color:var(--muted); margin-top:1.25rem; }
+  #done { display:none; background:var(--panel); padding:1.25rem; border-radius:4px; }
+  footer { margin-top:3rem; padding-top:1.25rem; border-top:1px solid var(--rule);
+           color:var(--muted); font-size:.875rem; }
+  a { color:inherit; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Get event texts</h1>
+<p class="lede">SF Activities sends occasional text messages suggesting local events around San Francisco — concerts, festivals, markets. Reply to say whether you're interested. Nothing is sold, and no marketing is sent.</p>
+
+<form id="signup" action="[YOUR FORM ENDPOINT]" method="POST">
+  <label for="phone">Mobile number</label>
+  <input type="tel" id="phone" name="phone" placeholder="(415) 555-0142"
+         autocomplete="tel" required>
+
+  <div class="consent">
+    <input type="checkbox" id="consent" name="consent" value="yes" required>
+    <span>
+      <label for="consent" style="display:inline; font-weight:600;">I agree to receive text messages about suggested local events.</label>
+      Message frequency varies, up to 5 messages per week. Message and data rates may apply.
+      Reply STOP to opt out, HELP for help. See our
+      <a href="./privacy.html">Privacy Policy</a> and
+      <a href="./terms.html">SMS Terms and Conditions</a>.
+    </span>
+  </div>
+
+  <button type="submit">Sign up for texts</button>
+
+  <p class="note">Consent is not a condition of any purchase. Your mobile number and consent are never shared or sold to third parties or affiliates for marketing or promotional purposes.</p>
+</form>
+
+<div id="done">
+  <p><strong>You're signed up.</strong> You'll get a confirmation text shortly. Reply STOP at any time to stop receiving messages.</p>
+</div>
+
+<footer>
+  Questions? Contact aostein1@gmail.com.
+</footer>
+
+<script>
+  const form = document.getElementById('signup');
+  form.addEventListener('submit', function (e) {
+    if (form.action.includes('[YOUR FORM ENDPOINT]')) {
+      e.preventDefault();
+      form.style.display = 'none';
+      document.getElementById('done').style.display = 'block';
+    }
+  });
+</script>
+
+</main>
+</body>
+</html>
