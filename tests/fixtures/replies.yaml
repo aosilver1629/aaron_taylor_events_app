@@ -1,0 +1,192 @@
+# Reply-parser fixtures. Each case is fed to app.sms.reply_parser.parse_reply
+# against `numbered_events`, and the result's yes/no lists must match
+# `expected` exactly. "no" here means "explicitly declined" — numbers absent
+# from both yes and no are the caller's responsibility to default to no
+# (see tests/test_ballot_resolution.py), matching the parser's contract of
+# never guessing a yes.
+#
+# Standard five-event list reused by most cases:
+default_events: &default_events
+  - [1, "Sat 8/29 7pm — Khruangbin at the Fillmore ($65)"]
+  - [2, "Sun 8/30 9am — Alemany flea market (free)"]
+  - [3, "Fri 9/4 8pm — SF Symphony at Davies Hall ($40)"]
+  - [4, "Sat 9/5 11am — Union Square art fair (free)"]
+  - [5, "Sun 9/6 6pm — Outside Lands day 3 at Golden Gate Park ($150)"]
+
+cases:
+  - name: simple_comma_list
+    numbered_events: *default_events
+    reply: "1, 3"
+    expected: { yes: [1, 3], no: [] }
+
+  - name: comma_list_no_space
+    numbered_events: *default_events
+    reply: "2,4"
+    expected: { yes: [2, 4], no: [] }
+
+  - name: space_separated
+    numbered_events: *default_events
+    reply: "1 3 5"
+    expected: { yes: [1, 3, 5], no: [] }
+
+  - name: single_number
+    numbered_events: *default_events
+    reply: "3"
+    expected: { yes: [3], no: [] }
+
+  - name: range_dash
+    numbered_events: *default_events
+    reply: "1-3"
+    expected: { yes: [1, 2, 3], no: [] }
+
+  - name: range_through
+    numbered_events: *default_events
+    reply: "1 through 3"
+    expected: { yes: [1, 2, 3], no: [] }
+
+  - name: range_plus_extra
+    numbered_events: *default_events
+    reply: "2-3 and 5"
+    expected: { yes: [2, 3, 5], no: [] }
+
+  - name: all_lowercase
+    numbered_events: *default_events
+    reply: "all"
+    expected: { yes: [1, 2, 3, 4, 5], no: [] }
+
+  - name: all_of_them
+    numbered_events: *default_events
+    reply: "all of them!"
+    expected: { yes: [1, 2, 3, 4, 5], no: [] }
+
+  - name: im_in_for_everything
+    numbered_events: *default_events
+    reply: "I'm down for everything"
+    expected: { yes: [1, 2, 3, 4, 5], no: [] }
+
+  - name: none
+    numbered_events: *default_events
+    reply: "none"
+    expected: { yes: [], no: [1, 2, 3, 4, 5] }
+
+  - name: nah
+    numbered_events: *default_events
+    reply: "nah"
+    expected: { yes: [], no: [1, 2, 3, 4, 5] }
+
+  - name: no_thanks
+    numbered_events: *default_events
+    reply: "no thanks"
+    expected: { yes: [], no: [1, 2, 3, 4, 5] }
+
+  - name: not_this_week
+    numbered_events: *default_events
+    reply: "skip this week, none for me"
+    expected: { yes: [], no: [1, 2, 3, 4, 5] }
+
+  - name: typo_yess
+    numbered_events: *default_events
+    reply: "yess 2"
+    expected: { yes: [2], no: [] }
+
+  - name: typo_ya
+    numbered_events: *default_events
+    reply: "ya 1 3"
+    expected: { yes: [1, 3], no: [] }
+
+  - name: typo_definately
+    numbered_events: *default_events
+    reply: "definately 4, defo want that one"
+    expected: { yes: [4], no: [] }
+
+  - name: hedge_maybe
+    numbered_events: *default_events
+    reply: "1, 3 and maybe 5"
+    expected: { yes: [1, 3, 5], no: [] }
+
+  - name: hedge_probably
+    numbered_events: *default_events
+    reply: "probably 2, and 4 for sure"
+    expected: { yes: [2, 4], no: [] }
+
+  - name: hedge_leaning
+    numbered_events: *default_events
+    reply: "leaning towards 1 but not sure, put me down anyway"
+    expected: { yes: [1], no: [] }
+
+  - name: reference_by_name_market
+    numbered_events: *default_events
+    reply: "the market one for sure"
+    expected: { yes: [2], no: [] }
+
+  - name: reference_by_name_fillmore
+    numbered_events: *default_events
+    reply: "yes to the fillmore show"
+    expected: { yes: [1], no: [] }
+
+  - name: reference_by_name_free
+    numbered_events: *default_events
+    reply: "whichever ones are free"
+    expected: { yes: [2, 4], no: [] }
+
+  - name: reference_by_name_symphony_no
+    numbered_events: *default_events
+    reply: "not the symphony, everything else sounds good"
+    expected: { yes: [1, 2, 4, 5], no: [3] }
+
+  - name: pure_garbage
+    numbered_events: *default_events
+    reply: "asdkjfh alskdjf ??"
+    expected: { yes: [], no: [] }
+
+  - name: emoji_only
+    numbered_events: *default_events
+    reply: "👍👍"
+    expected: { yes: [], no: [] }
+
+  - name: explicit_decline_two
+    numbered_events: *default_events
+    reply: "not 2 or 4, everything else works"
+    expected: { yes: [1, 3, 5], no: [2, 4] }
+
+  - name: only_decline_one
+    numbered_events: *default_events
+    reply: "skip the symphony"
+    expected: { yes: [], no: [3] }
+
+  - name: polite_confirmation
+    numbered_events: *default_events
+    reply: "sure, 1 sounds fun"
+    expected: { yes: [1], no: [] }
+
+  - name: enthusiastic
+    numbered_events: *default_events
+    reply: "omg yes to 5!!! also 1"
+    expected: { yes: [1, 5], no: [] }
+
+  - name: ampersand
+    numbered_events: *default_events
+    reply: "1 & 2 please"
+    expected: { yes: [1, 2], no: [] }
+
+  - name: numbers_with_periods
+    numbered_events: *default_events
+    reply: "1. 2. 4."
+    expected: { yes: [1, 2, 4], no: [] }
+
+  - name: mixed_case_none
+    numbered_events: *default_events
+    reply: "NONE"
+    expected: { yes: [], no: [1, 2, 3, 4, 5] }
+
+  - name: out_of_range_number_ignored
+    numbered_events: *default_events
+    reply: "9"
+    expected: { yes: [], no: [] }
+
+  - name: small_list_two_events
+    numbered_events:
+      - [1, "Sat 8/29 7pm — Khruangbin at the Fillmore ($65)"]
+      - [2, "Sun 8/30 9am — Alemany flea market (free)"]
+    reply: "both"
+    expected: { yes: [1, 2], no: [] }
