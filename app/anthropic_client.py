@@ -37,6 +37,7 @@ def call_tool_with_validated_json(
     max_tokens: int = 1024,
     extra_tools: list[dict] | None = None,
     tool_choice_name: str | None = None,
+    temperature: float = 1.0,
 ) -> dict:
     """Call `tool` (forced tool_choice) and return its validated input.
 
@@ -59,6 +60,7 @@ def call_tool_with_validated_json(
             tools=tools,
             tool_choice={"type": "tool", "name": forced_name},
             messages=messages,
+            temperature=temperature,
         )
         tool_use = next(
             (b for b in response.content if getattr(b, "type", None) == "tool_use"),

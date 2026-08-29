@@ -32,9 +32,18 @@ number, do not guess — leave it out of both yes and no entirely. Never put \
 a number in "yes" unless the message clearly expresses interest in it.
 - Only include numbers that actually appear in the numbered list you were \
 given. Every number you return in "yes" or "no" must come from that list.
-- It is fine, and expected, for numbers not mentioned in the message to be \
-absent from both lists — the caller treats anything you don't return as a \
-no, so never pad "no" with numbers you're unsure about; just leave them out."""
+- Do NOT try to classify every number in the list unless the message \
+clearly means the whole list (see the "all"/"none" rules above). Most \
+replies only mention a few specific numbers — the rest must be left out \
+of BOTH arrays, not defaulted into "no". Example: if the list has events \
+1-5 and the reply is "1, 3", the correct output is yes=[1, 3], no=[] — NOT \
+no=[2, 4, 5]. Declining or ignoring one specific event also does not make \
+the others a "yes": if the reply is "skip the symphony (event 3)" with no \
+other events mentioned, the correct output is yes=[], no=[3] — NOT \
+yes=[1, 2, 4, 5]. It is normal and expected for yes and no to together \
+cover only a small fraction of the numbered list, EXCEPT when the message \
+is a blanket reply like "none"/"nah"/"no thanks"/"skip this week", which \
+still means every number in the list goes in "no"."""
 
 TOOL = {
     "name": "record_reply",
@@ -96,6 +105,7 @@ def parse_reply(raw_body: str, numbered_events: list[tuple[int, str]]) -> ReplyP
             tool=TOOL,
             validate=lambda raw: _validate(raw, valid_numbers),
             max_tokens=300,
+            temperature=0,
         )
     except MalformedToolOutput:
         logger.error(
