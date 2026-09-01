@@ -140,10 +140,10 @@ def run_research_call(structured_context: str, preference_summary: str) -> list[
         }
     ]
 
-    def _turn(tool_choice, tools_for_turn):
+    def _turn(tool_choice, tools_for_turn, max_tokens=8000):
         return client.messages.create(
             model=RESEARCH_MODEL,
-            max_tokens=8000,
+            max_tokens=max_tokens,
             system=_system_prompt(),
             tools=tools_for_turn,
             tool_choice=tool_choice,
@@ -151,7 +151,9 @@ def run_research_call(structured_context: str, preference_summary: str) -> list[
         )
 
     response = with_retry(
-        lambda: _turn({"type": "auto"}, tools), what="research_call_turn1", reraise=True
+        lambda: _turn({"type": "auto"}, tools, max_tokens=24000),
+        what="research_call_turn1",
+        reraise=True,
     )
 
     submit = _find_tool_use(response, "submit_events")
@@ -165,8 +167,10 @@ def run_research_call(structured_context: str, preference_summary: str) -> list[
 
     # Corrective retry: search context is already in history, so it's safe
     # to force the output tool now. Do not attempt to regex-repair the
-    # first response — just ask again with tool_choice forced.
-    messages.append({"role": "assistant", "content": response.content})
+    # first response — just ask again with tool_choice forced. If turn one
+    # hit max_tokens mid tool-call, trim the dangling unresolved tool-use
+    # block first — replaying it as-is gets the whole request rejected.
+    messages.append({"role": "assistant", "content": _trim_unresolved_tail(response.content)})
     messages.append(
         {
             "role": "user",
@@ -193,6 +197,23 @@ def _find_tool_use(response, name: str):
         if getattr(block, "type", None) == "tool_use" and block.name == name:
             return block
     return None
+
+
+_TOOL_USE_TYPES = {"tool_use", "server_tool_use"}
+
+
+def _trim_unresolved_tail(content: list) -> list:
+    """Drop trailing tool-use blocks left dangling by a max_tokens cutoff.
+
+    Opus can hit max_tokens mid-turn while it's still using its bundled
+    code_execution tool to orchestrate searches — the response then ends on
+    an unresolved server_tool_use with no matching *_tool_result, which the
+    API rejects outright if replayed as-is into the next turn's history.
+    """
+    content = list(content)
+    while content and getattr(content[-1], "type", None) in _TOOL_USE_TYPES:
+        content.pop()
+    return content
 
 
 RANK_MODEL = "claude-opus-5"

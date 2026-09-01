@@ -1,7 +1,8 @@
 """Job 1 — Research. Runs weekly, Sunday 08:00 America/Los_Angeles (wired up
-in app.scheduler). Pulls Ticketmaster + Bandsintown deterministically, runs
-one Claude research call with web search, validates every candidate, and
-caps the final list at 12.
+in app.scheduler). Pulls Ticketmaster + Bandsintown deterministically, pulls
+a curated list of SF sources (see app.research.deterministic_search — regex-
+parsed where possible, Claude-extracted otherwise), validates every
+candidate, and caps the final list at 12.
 """
 from __future__ import annotations
 
@@ -13,7 +14,8 @@ from app.config import Settings, get_settings
 from app.db import Repository
 from app.logging_config import log_job_run
 from app.research.bandsintown import fetch_bandsintown_events
-from app.research.claude_research import rank_and_select, run_research_call
+from app.research.claude_research import rank_and_select
+from app.research.deterministic_search import run_deterministic_research_call as run_research_call
 from app.research.preferences import build_preference_summary
 from app.research.ticketmaster import fetch_ticketmaster_events
 from app.research.validation import validate_candidate
