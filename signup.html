@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign up for event texts — SF Activities</title>
+<title>Sign up for event suggestions — SF Activities</title>
 <style>
   :root { --ink:#1a1a1a; --muted:#5a5a5a; --rule:#e0ddd6; --bg:#fdfcfa; --panel:#f1efe9; }
   * { box-sizing:border-box; }
@@ -17,17 +17,23 @@
   .lede { color:var(--muted); margin:0 0 2rem; padding-bottom:1.5rem;
           border-bottom:1px solid var(--rule); }
   label { display:block; font-weight:600; font-size:.9rem; margin-bottom:.4rem; }
-  input[type="tel"] {
+  input[type="tel"], input[type="email"] {
     width:100%; padding:.7rem .8rem; font-size:1rem; font-family:inherit;
     border:1px solid #c9c4b8; border-radius:4px; background:#fff; color:var(--ink);
   }
-  input[type="tel"]:focus, button:focus-visible, input[type="checkbox"]:focus-visible {
+  input[type="tel"]:focus, input[type="email"]:focus, button:focus-visible, input[type="checkbox"]:focus-visible {
     outline:2px solid #1a1a1a; outline-offset:2px;
   }
+  .hint { font-size:.8rem; color:var(--muted); margin:.4rem 0 0; }
+  fieldset {
+    border:1px solid var(--rule); border-radius:4px;
+    padding:1.1rem 1.1rem 1.25rem; margin:1.5rem 0 0;
+  }
+  legend { font-weight:600; font-size:.9rem; padding:0 .4rem; margin-left:-.4rem; }
   .consent {
     display:flex; gap:.7rem; align-items:flex-start;
     background:var(--panel); border-left:3px solid #c9c4b8;
-    padding:1rem 1.1rem; margin:1.5rem 0;
+    padding:1rem 1.1rem; margin:0 0 1.25rem;
   }
   .consent input { margin-top:.3rem; flex-shrink:0; width:1.05rem; height:1.05rem; }
   .consent span { font-size:.9rem; line-height:1.55; }
@@ -46,32 +52,42 @@
 <body>
 <main>
 
-<h1>Get event texts</h1>
-<p class="lede">SF Activities sends occasional text messages suggesting local events around San Francisco — concerts, festivals, markets. Reply to say whether you're interested. Nothing is sold, and no marketing is sent.</p>
+<h1>Get event suggestions</h1>
+<p class="lede">SF Activities sends occasional suggestions for local events around San Francisco — concerts, festivals, markets — by email. You can optionally add text message alerts too. Nothing is sold, and no marketing is sent.</p>
 
 <form id="signup" action="[YOUR FORM ENDPOINT]" method="POST">
-  <label for="phone">Mobile number</label>
-  <input type="tel" id="phone" name="phone" placeholder="(415) 555-0142"
-         autocomplete="tel" required>
+  <label for="email">Email address</label>
+  <input type="email" id="email" name="email" placeholder="you@example.com"
+         autocomplete="email" required>
+  <p class="hint">Required. Event suggestions are sent by email.</p>
 
-  <div class="consent">
-    <input type="checkbox" id="consent" name="consent" value="yes" required>
-    <span>
-      <label for="consent" style="display:inline; font-weight:600;">I agree to receive text messages about suggested local events.</label>
-      Message frequency varies, up to 5 messages per week. Message and data rates may apply.
-      Reply STOP to opt out, HELP for help. See our
-      <a href="./privacy.html">Privacy Policy</a> and
-      <a href="./terms.html">SMS Terms and Conditions</a>.
-    </span>
-  </div>
+  <fieldset>
+    <legend>Text messages — optional</legend>
 
-  <button type="submit">Sign up for texts</button>
+    <div class="consent">
+      <input type="checkbox" id="consent" name="consent" value="yes">
+      <span>
+        <label for="consent" style="display:inline; font-weight:600;">I agree to receive text messages about suggested local events.</label>
+        Message frequency varies, up to 5 messages per week. Message and data rates may apply.
+        Reply STOP to opt out, HELP for help. See our
+        <a href="./privacy.html">Privacy Policy</a> and
+        <a href="./terms.html">SMS Terms and Conditions</a>.
+      </span>
+    </div>
 
-  <p class="note">Consent is not a condition of any purchase. Your mobile number and consent are never shared or sold to third parties or affiliates for marketing or promotional purposes.</p>
+    <label for="phone">Mobile number</label>
+    <input type="tel" id="phone" name="phone" placeholder="(415) 555-0142"
+           autocomplete="tel">
+    <p class="hint">Only needed if you check the box above. Leave both blank to sign up for email only — you'll receive the same event suggestions either way.</p>
+  </fieldset>
+
+  <button type="submit">Sign up</button>
+
+  <p class="note">Text message consent is entirely optional and is not required to sign up or to receive event suggestions. Consent is not a condition of any purchase. Your mobile number and consent are never shared or sold to third parties or affiliates for marketing or promotional purposes.</p>
 </form>
 
 <div id="done">
-  <p><strong>You're signed up.</strong> You'll get a confirmation text shortly. Reply STOP at any time to stop receiving messages.</p>
+  <p><strong>You're signed up.</strong> You'll start receiving event suggestions by email. If you opted in to text messages, you'll also get a confirmation text shortly — reply STOP at any time to stop receiving them.</p>
 </div>
 
 <footer>
