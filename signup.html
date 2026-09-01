@@ -97,7 +97,7 @@
 <script>
   const form = document.getElementById('signup');
   form.addEventListener('submit', function (e) {
-    if (form.action.includes('[YOUR FORM ENDPOINT]')) {
+    if (form.getAttribute('action').includes('[YOUR FORM ENDPOINT]')) {
       e.preventDefault();
       form.style.display = 'none';
       document.getElementById('done').style.display = 'block';
