@@ -36,14 +36,19 @@ class Repository:
     numbering) so job code stays testable against `FakeRepository`.
     """
 
-    def __init__(self, client: Client | None = None):
+    def __init__(self, client: Client | None = None, events_table: str = "events"):
         self._client = client or get_client()
+        # Lets research-tuning work point every event method at a disposable
+        # sandbox table (e.g. Repository(events_table="events_sandbox"))
+        # without touching research_job.py/validate_candidate — they only
+        # ever go through these methods, never the raw table name.
+        self._events_table = events_table
 
     # ---- events -----------------------------------------------------
 
     def event_key_exists(self, event_key: str) -> bool:
         res = (
-            self._client.table("events")
+            self._client.table(self._events_table)
             .select("id")
             .eq("event_key", event_key)
             .limit(1)
@@ -65,12 +70,12 @@ class Repository:
             "pitch": event.pitch,
             "source": event.source,
         }
-        res = self._client.table("events").insert(row).execute()
+        res = self._client.table(self._events_table).insert(row).execute()
         return Event.from_row(res.data[0])
 
     def get_event(self, event_id: UUID) -> Event | None:
         res = (
-            self._client.table("events")
+            self._client.table(self._events_table)
             .select("*")
             .eq("id", str(event_id))
             .limit(1)
@@ -79,7 +84,7 @@ class Repository:
         return Event.from_row(res.data[0]) if res.data else None
 
     def set_calendar_event_id(self, event_id: UUID, calendar_event_id: str) -> None:
-        self._client.table("events").update(
+        self._client.table(self._events_table).update(
             {"calendar_event_id": calendar_event_id}
         ).eq("id", str(event_id)).execute()
 
@@ -92,7 +97,7 @@ class Repository:
         job runs every 15 minutes against a handful of open events.
         """
         events_res = (
-            self._client.table("events")
+            self._client.table(self._events_table)
             .select("*")
             .is_("calendar_event_id", "null")
             .execute()
