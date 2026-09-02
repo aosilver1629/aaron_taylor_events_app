@@ -17,7 +17,7 @@ from app.sms.provider import SMSProvider, get_sms_provider
 
 logger = logging.getLogger("ballot_job")
 
-HEADER = 'This week in SF — reply with the numbers you\'re in for (or "none"):'
+HEADER = 'This week in SF - reply with the numbers you\'re in for (or "none"):'
 MAX_SMS_LEN = 1600
 
 

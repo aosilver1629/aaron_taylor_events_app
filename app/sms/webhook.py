@@ -12,7 +12,7 @@ from twilio.request_validator import RequestValidator
 from app.config import Settings
 from app.db import Repository
 from app.models import Ballot
-from app.sms.formatting import event_label
+from app.sms.formatting import event_label, gsm7_safe
 from app.sms.provider import SMSProvider
 from app.sms.reply_parser import parse_reply
 
@@ -57,7 +57,7 @@ def _numbered_events(repo: Repository, ballots: list[Ballot]) -> tuple[list[tupl
     for ballot in sorted(ballots, key=lambda b: b.list_number):
         event = repo.get_event(ballot.event_id)
         label = event_label(event) if event else f"item {ballot.list_number}"
-        title = event.title if event else f"item {ballot.list_number}"
+        title = gsm7_safe(event.title) if event else f"item {ballot.list_number}"
         numbered.append((ballot.list_number, label))
         titles[ballot.list_number] = title
     return numbered, titles
@@ -70,12 +70,12 @@ def resolve_reply(repo: Repository, person: str, raw_body: str) -> str:
     """
     batch_id = repo.get_latest_batch_id(person)
     if batch_id is None:
-        return "No event list has gone out yet — nothing to vote on."
+        return "No event list has gone out yet - nothing to vote on."
 
     ballots = repo.get_ballots_for_batch(batch_id, person)
     open_ballots = [b for b in ballots if b.response is None]
     if not open_ballots:
-        return "That list is already closed out — nothing open to vote on right now."
+        return "That list is already closed out - nothing open to vote on right now."
 
     numbered_events, titles = _numbered_events(repo, open_ballots)
     parsed = parse_reply(raw_body, numbered_events)
@@ -88,8 +88,8 @@ def resolve_reply(repo: Repository, person: str, raw_body: str) -> str:
         (yes_titles if response == "yes" else no_titles).append(titles[ballot.list_number])
 
     if yes_titles:
-        return f"Got it — you're in for: {', '.join(yes_titles)}. Everything else logged as no."
-    return "Got it — logged as no for everything on this list."
+        return f"Got it - you're in for: {', '.join(yes_titles)}. Everything else logged as no."
+    return "Got it - logged as no for everything on this list."
 
 
 def handle_inbound_sms(
