@@ -155,11 +155,15 @@ def _clean_html(raw_html: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _has_blocked_marker(text: str) -> bool:
+    lowered = text.lower()
+    return any(marker in lowered for marker in _BLOCKED_MARKERS)
+
+
 def _looks_blocked_or_empty(text: str) -> bool:
     if len(text) < _MIN_REAL_CONTENT_CHARS:
         return True
-    lowered = text.lower()
-    return any(marker in lowered for marker in _BLOCKED_MARKERS)
+    return _has_blocked_marker(text)
 
 
 # ---- regex parsers for structured venue-calendar pages ------------------
@@ -442,20 +446,26 @@ def _fetch_via_search_fallback(source: dict) -> str:
     return "\n".join(b.text for b in response.content if getattr(b, "type", None) == "text").strip()
 
 
-def _get_source_text(source: dict) -> tuple[str, str]:
-    """Returns (text, method) — method is 'http' or 'search_fallback', for
-    logging/inspection. Full, untruncated text — a regex parser needs to
-    see the whole page (GAMH's listing alone runs past MAX_SOURCE_CHARS);
-    truncation for the LLM path happens in _extract_from_source instead."""
+def _get_source_text(source: dict) -> tuple[str, str, bool]:
+    """Returns (text, method, blocked_marker_seen). method is 'http' or
+    'search_fallback', for logging/inspection. blocked_marker_seen reflects
+    whether the *original* http attempt hit one of _BLOCKED_MARKERS
+    specifically (not just being short/empty) — feeds the source registry's
+    "blocked" status (Phase 1); it's evaluated here because once a fallback
+    happens the http text itself isn't returned, only the fallback's. Full,
+    untruncated text — a regex parser needs to see the whole page (GAMH's
+    listing alone runs past MAX_SOURCE_CHARS); truncation for the LLM path
+    happens in _extract_from_source instead."""
     text = _fetch_via_http(source["url"])
+    blocked = _has_blocked_marker(text)
     if not _looks_blocked_or_empty(text):
-        return text, "http"
+        return text, "http", False
 
     logger.info(
         "deterministic_http_fetch_thin_falling_back_to_search",
         extra={"job_fields": {"source": source["label"], "url": source["url"]}},
     )
-    return _fetch_via_search_fallback(source), "search_fallback"
+    return _fetch_via_search_fallback(source), "search_fallback", blocked
 
 
 _EXTRACT_SYSTEM_PROMPT_HEADER = """You are given raw text pulled from one \
@@ -517,7 +527,11 @@ def _extract_from_source(source: dict, text: str, structured_context: str, prefe
 
     settings = get_settings()
     client = Anthropic(api_key=settings.anthropic_api_key)
-    instructions = _KIND_INSTRUCTIONS[source["kind"]].format(label=source["label"], url=source["url"])
+    # A registry-loaded source (Phase 1) carries its own extraction_rules
+    # template, editable per-source without a code change; a hardcoded
+    # SOURCES entry has none, so fall back to the per-kind default.
+    rules_template = source.get("extraction_rules") or _KIND_INSTRUCTIONS[source["kind"]]
+    instructions = rules_template.format(label=source["label"], url=source["url"])
     today = to_pacific(now_utc()).strftime("%A, %B %-d, %Y")
     system = _EXTRACT_SYSTEM_PROMPT_HEADER.format(instructions=instructions, today=today)
 
@@ -596,9 +610,24 @@ def _run_regex_parser(source: dict, text: str, preference_summary: str) -> list[
     return events
 
 
-def run_deterministic_research_call(structured_context: str, preference_summary: str) -> list[dict]:
+def run_deterministic_research_call(
+    structured_context: str,
+    preference_summary: str,
+    sources: list[dict] | None = None,
+    record_run=None,
+) -> list[dict]:
     """Same return shape as claude_research.run_research_call — raw event
     dicts from submit_events.input["events"].
+
+    `sources` defaults to the hardcoded SOURCES list; a caller can pass the
+    registry-loaded list instead (app.research.source_registry.load_sources)
+    without this module needing to import that module itself — avoids a
+    circular import, since source_registry already depends on this module
+    for the fallback list. Same reasoning for `record_run`: an optional
+    `(source, fetch_method, extract_method, candidates, blocked_marker_seen)
+    -> None` callback the caller wires to source_registry.record_source_run;
+    left None, no health tracking happens (e.g. when sources came from the
+    hardcoded fallback, or a caller just doesn't care).
 
     Per source: a regex parser (see SOURCES' "parser" key) is tried first
     when the fetch was plain HTTP — free, and proved far more reliable than
@@ -609,9 +638,10 @@ def run_deterministic_research_call(structured_context: str, preference_summary:
     proved unreliable at that scale in testing. Cross-source dedup still
     happens downstream in validate_candidate's seen_keys tracking, so
     splitting extraction doesn't lose that."""
+    sources = sources if sources is not None else SOURCES
     all_candidates: list[dict] = []
-    for source in SOURCES:
-        text, method = _get_source_text(source)
+    for source in sources:
+        text, method, blocked = _get_source_text(source)
         logger.info(
             "deterministic_source_fetched",
             extra={"job_fields": {"source": source["label"], "method": method, "chars": len(text)}},
@@ -625,6 +655,9 @@ def run_deterministic_research_call(structured_context: str, preference_summary:
         if not candidates:
             candidates = _extract_from_source(source, text, structured_context, preference_summary)
             used = "llm"
+
+        if record_run is not None:
+            record_run(source, method, used, len(candidates), blocked)
 
         logger.info(
             "deterministic_source_extracted",

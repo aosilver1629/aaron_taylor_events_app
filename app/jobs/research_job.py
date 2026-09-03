@@ -17,6 +17,7 @@ from app.research.bandsintown import fetch_bandsintown_events
 from app.research.claude_research import rank_and_select
 from app.research.deterministic_search import run_deterministic_research_call as run_research_call
 from app.research.preferences import build_preference_summary
+from app.research.source_registry import load_sources, record_source_run
 from app.research.ticketmaster import fetch_ticketmaster_events
 from app.research.validation import validate_candidate
 from app.utils.time import now_utc
@@ -46,7 +47,13 @@ def run_research_job(repo: Repository, settings: Settings | None = None) -> dict
 
     preference_summary = build_preference_summary(repo)
 
-    raw_candidates = run_research_call(_structured_context_text(structured), preference_summary)
+    sources = load_sources(repo)
+    raw_candidates = run_research_call(
+        _structured_context_text(structured),
+        preference_summary,
+        sources=sources,
+        record_run=lambda source, fm, em, c, b: record_source_run(repo, source, fm, em, c, b),
+    )
 
     seen_keys: set[str] = set()
     validated = []

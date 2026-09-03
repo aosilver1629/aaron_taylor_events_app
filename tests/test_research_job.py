@@ -31,7 +31,7 @@ def test_valid_candidates_are_inserted(monkeypatch):
     monkeypatch.setattr(research_job_mod, "fetch_ticketmaster_events", lambda s, window_days=21: [])
     monkeypatch.setattr(research_job_mod, "fetch_bandsintown_events", lambda s: [])
     candidates = [_candidate(f"Show {i}") for i in range(5)]
-    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref: candidates)
+    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref, **kw: candidates)
 
     result = research_job_mod.run_research_job(repo)
 
@@ -50,7 +50,7 @@ def test_bad_rows_are_rejected(monkeypatch):
     good = _candidate("Good Show")
 
     monkeypatch.setattr(
-        research_job_mod, "run_research_call", lambda ctx, pref: [too_far, no_title, bad_date, good]
+        research_job_mod, "run_research_call", lambda ctx, pref, **kw: [too_far, no_title, bad_date, good]
     )
 
     result = research_job_mod.run_research_job(repo)
@@ -67,7 +67,7 @@ def test_duplicate_within_run_is_rejected(monkeypatch):
 
     dup = _candidate("Same Show", days_from_now=5, venue="Same Venue")
     dup2 = _candidate("Same Show", days_from_now=5, venue="Same Venue")
-    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref: [dup, dup2])
+    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref, **kw: [dup, dup2])
 
     result = research_job_mod.run_research_job(repo)
     assert result["inserted"] == 1
@@ -87,7 +87,7 @@ def test_duplicate_of_existing_event_is_rejected(monkeypatch):
     monkeypatch.setattr(research_job_mod, "fetch_ticketmaster_events", lambda s, window_days=21: [])
     monkeypatch.setattr(research_job_mod, "fetch_bandsintown_events", lambda s: [])
     monkeypatch.setattr(
-        research_job_mod, "run_research_call", lambda ctx, pref: [existing_candidate]
+        research_job_mod, "run_research_call", lambda ctx, pref, **kw: [existing_candidate]
     )
 
     job_result = research_job_mod.run_research_job(repo)
@@ -101,7 +101,7 @@ def test_more_than_cap_triggers_ranking_call(monkeypatch):
     monkeypatch.setattr(research_job_mod, "fetch_bandsintown_events", lambda s: [])
 
     candidates = [_candidate(f"Show {i}", venue=f"Venue {i}") for i in range(15)]
-    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref: candidates)
+    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref, **kw: candidates)
 
     rank_calls = []
 
@@ -123,7 +123,7 @@ def test_at_or_under_cap_skips_ranking_call(monkeypatch):
     monkeypatch.setattr(research_job_mod, "fetch_bandsintown_events", lambda s: [])
 
     candidates = [_candidate(f"Show {i}", venue=f"Venue {i}") for i in range(research_job_mod.EVENT_CAP)]
-    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref: candidates)
+    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref, **kw: candidates)
 
     def fail_rank(*a, **k):
         raise AssertionError("rank_and_select should not be called at/under the cap")

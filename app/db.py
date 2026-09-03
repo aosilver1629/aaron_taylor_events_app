@@ -219,6 +219,58 @@ class Repository:
             {"person": person, "direction": direction, "body": body}
         ).execute()
 
+    # ---- sources / source_runs (curation layer, Phase 1) -----------------
+
+    def get_sources(self, city: str = "sf") -> list[dict]:
+        res = (
+            self._client.table("sources")
+            .select("*")
+            .eq("city", city)
+            .eq("enabled", True)
+            .execute()
+        )
+        return res.data
+
+    def insert_source_run(
+        self,
+        source_id,
+        fetch_method: str,
+        extract_method: str,
+        candidates: int,
+        blocked_marker_seen: bool,
+    ) -> None:
+        self._client.table("source_runs").insert(
+            {
+                "source_id": str(source_id),
+                "fetch_method": fetch_method,
+                "extract_method": extract_method,
+                "candidates": candidates,
+                "blocked_marker_seen": blocked_marker_seen,
+            }
+        ).execute()
+
+    def get_recent_source_runs(self, source_id, limit: int = 8) -> list[dict]:
+        res = (
+            self._client.table("source_runs")
+            .select("*")
+            .eq("source_id", str(source_id))
+            .order("run_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return res.data
+
+    def update_source_status(
+        self, source_id, status: str, status_reason: str | None, consecutive_zero_runs: int = 0
+    ) -> None:
+        self._client.table("sources").update(
+            {
+                "status": status,
+                "status_reason": status_reason,
+                "consecutive_zero_runs": consecutive_zero_runs,
+            }
+        ).eq("id", str(source_id)).execute()
+
 
 def new_uuid() -> UUID:
     return uuid4()

@@ -15,6 +15,7 @@ from fastapi import FastAPI, Request, Response
 from app.config import get_settings
 from app.db import Repository
 from app.logging_config import configure_logging
+from app.research.source_registry import get_source_health
 from app.sms.provider import get_sms_provider
 from app.sms.webhook import handle_inbound_sms, verify_twilio_signature
 
@@ -48,6 +49,15 @@ app = FastAPI(title="SF Events Voting Workflow", lifespan=lifespan)
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/ops/sources")
+def ops_sources(city: str = "sf") -> dict:
+    """Curation layer, Phase 1 — no UI, this JSON is the testable surface.
+    Per source: label, which fetch/extract methods the latest run actually
+    used, health status + reason, and the last 8 runs' candidate counts."""
+    repo = Repository()
+    return {"sources": get_source_health(repo, city=city)}
 
 
 def _request_url(request: Request) -> str:

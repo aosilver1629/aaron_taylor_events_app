@@ -17,6 +17,12 @@ class FakeRepository:
         self.events: dict[UUID, Event] = {}
         self.ballots: dict[UUID, Ballot] = {}
         self.sms_log: list[dict] = []
+        # Curation layer (Phase 1+): tests populate `self.sources[id] = {...}`
+        # directly, same pattern as `self.events`/`self.ballots` — no
+        # separate seed method, since real Repository seeding happens via
+        # raw SQL (sql/seed_sources.sql), not through the app.
+        self.sources: dict[UUID, dict] = {}
+        self.source_runs: list[dict] = []
 
     # ---- events ----
 
@@ -134,3 +140,39 @@ class FakeRepository:
 
     def log_sms(self, person: str | None, direction: str, body: str) -> None:
         self.sms_log.append({"person": person, "direction": direction, "body": body})
+
+    # ---- sources / source_runs (curation layer, Phase 1) ----
+
+    def get_sources(self, city: str = "sf") -> list[dict]:
+        return [
+            s for s in self.sources.values()
+            if s.get("city", "sf") == city and s.get("enabled", True)
+        ]
+
+    def insert_source_run(
+        self, source_id, fetch_method: str, extract_method: str, candidates: int, blocked_marker_seen: bool
+    ) -> None:
+        self.source_runs.append(
+            {
+                "id": uuid4(),
+                "source_id": source_id,
+                "run_at": now_utc(),
+                "fetch_method": fetch_method,
+                "extract_method": extract_method,
+                "candidates": candidates,
+                "blocked_marker_seen": blocked_marker_seen,
+            }
+        )
+
+    def get_recent_source_runs(self, source_id, limit: int = 8) -> list[dict]:
+        runs = [r for r in self.source_runs if r["source_id"] == source_id]
+        runs.sort(key=lambda r: r["run_at"], reverse=True)
+        return runs[:limit]
+
+    def update_source_status(
+        self, source_id, status: str, status_reason: str | None, consecutive_zero_runs: int = 0
+    ) -> None:
+        if source_id in self.sources:
+            self.sources[source_id]["status"] = status
+            self.sources[source_id]["status_reason"] = status_reason
+            self.sources[source_id]["consecutive_zero_runs"] = consecutive_zero_runs

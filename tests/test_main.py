@@ -88,3 +88,40 @@ def test_sms_webhook_rejects_bad_twilio_signature(monkeypatch):
         )
 
     assert resp.status_code == 403
+
+
+def test_ops_sources_shape(monkeypatch):
+    from uuid import uuid4
+
+    repo = FakeRepository()
+    source_id = uuid4()
+    repo.sources[source_id] = {
+        "id": source_id,
+        "label": "Test Venue",
+        "city": "sf",
+        "url": "https://example.com",
+        "kind": "venue",
+        "preferred_tier": 1,
+        "parser_id": None,
+        "extraction_rules": None,
+        "enabled": True,
+        "status": "healthy",
+        "status_reason": None,
+        "consecutive_zero_runs": 0,
+    }
+    repo.insert_source_run(source_id, "http", "regex", 5, False)
+
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.get("/ops/sources")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "sources" in body
+    assert len(body["sources"]) == 1
+    entry = body["sources"][0]
+    assert entry["label"] == "Test Venue"
+    assert entry["tier_in_use"] == "http/regex"
+    assert entry["status"] == "healthy"
+    assert entry["recent_candidates"] == [5]
