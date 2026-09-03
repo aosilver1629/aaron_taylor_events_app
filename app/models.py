@@ -34,6 +34,12 @@ class EventIn:
     url: str | None = None
     pitch: str | None = None
     source: str | None = None
+    # Curation layer, Phase 2 (enrichment/tagging) — defaults keep every
+    # existing EventIn(...) call site (and test) passing unchanged.
+    tags: list[str] = field(default_factory=list)
+    entities: list[dict] = field(default_factory=list)  # [{"name": ..., "role": "performer|author|speaker"}]
+    gist: str | None = None
+    tag_confidence: float | None = None
 
 
 @dataclass
@@ -52,6 +58,12 @@ class Event:
     source: str | None
     discovered_at: datetime
     calendar_event_id: str | None
+    # Curation layer, Phase 2 (enrichment/tagging) — defaults keep every
+    # existing Event(...) call site (and test) passing unchanged.
+    tags: list[str] = field(default_factory=list)
+    entities: list[dict] = field(default_factory=list)
+    gist: str | None = None
+    tag_confidence: float | None = None
 
     @classmethod
     def from_row(cls, row: dict) -> "Event":
@@ -70,6 +82,10 @@ class Event:
             source=row.get("source"),
             discovered_at=_parse_dt(row.get("discovered_at")) or datetime.now(),
             calendar_event_id=row.get("calendar_event_id"),
+            tags=row.get("tags") or [],
+            entities=row.get("entities") or [],
+            gist=row.get("gist"),
+            tag_confidence=row.get("tag_confidence"),
         )
 
 

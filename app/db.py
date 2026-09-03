@@ -69,6 +69,10 @@ class Repository:
             "url": event.url,
             "pitch": event.pitch,
             "source": event.source,
+            "tags": event.tags,
+            "entities": event.entities,
+            "gist": event.gist,
+            "tag_confidence": event.tag_confidence,
         }
         res = self._client.table(self._events_table).insert(row).execute()
         return Event.from_row(res.data[0])
@@ -87,6 +91,34 @@ class Repository:
         self._client.table(self._events_table).update(
             {"calendar_event_id": calendar_event_id}
         ).eq("id", str(event_id)).execute()
+
+    def update_event_enrichment(
+        self,
+        event_id: UUID,
+        tags: list[str],
+        entities: list[dict],
+        gist: str | None,
+        tag_confidence: float | None,
+    ) -> None:
+        """Curation layer, Phase 2 — for scripts/backfill_tags.py, which
+        enriches events already stored (insert_event only sets these at
+        insert time for new events)."""
+        self._client.table(self._events_table).update(
+            {"tags": tags, "entities": entities, "gist": gist, "tag_confidence": tag_confidence}
+        ).eq("id", str(event_id)).execute()
+
+    def get_events_with_empty_tags(self, limit: int = 200) -> list[Event]:
+        """Curation layer, Phase 2 — backfill target: stored events that
+        predate enrichment being wired in."""
+        res = (
+            self._client.table(self._events_table)
+            .select("*")
+            .eq("tags", "{}")
+            .order("discovered_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return [Event.from_row(row) for row in res.data]
 
     def get_events_awaiting_calendar_write(self) -> list[Event]:
         """Events with no calendar_event_id yet where BOTH people said yes.

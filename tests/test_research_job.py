@@ -7,9 +7,21 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+import pytest
+
 import app.jobs.research_job as research_job_mod
 from app.utils.time import now_utc
 from tests.fake_repo import FakeRepository
+
+
+@pytest.fixture(autouse=True)
+def _no_op_enrichment(monkeypatch):
+    """Curation layer Phase 2 wired enrich_events unconditionally into
+    run_research_job. Without this, every test below (none of which care
+    about tagging) would hit with_retry's real exponential backoff against
+    a real/failing Anthropic call. The one test that does care about
+    tagging overrides this with its own monkeypatch.setattr call."""
+    monkeypatch.setattr(research_job_mod, "enrich_events", lambda events, settings: None)
 
 
 def _candidate(title, days_from_now=3, venue="Test Venue", category="concert", url=None):
@@ -132,3 +144,28 @@ def test_at_or_under_cap_skips_ranking_call(monkeypatch):
 
     result = research_job_mod.run_research_job(repo)
     assert result["inserted"] == research_job_mod.EVENT_CAP
+
+
+def test_enrichment_tags_flow_through_to_inserted_events(monkeypatch):
+    """Curation layer Phase 2: enrich_events runs before ranking/storage, so
+    inserted events carry tags, and run_research_job reports tag_coverage."""
+    repo = FakeRepository()
+    monkeypatch.setattr(research_job_mod, "fetch_ticketmaster_events", lambda s, window_days=21: [])
+    monkeypatch.setattr(research_job_mod, "fetch_bandsintown_events", lambda s: [])
+
+    candidates = [_candidate("Show 1"), _candidate("Show 2", venue="Other Venue")]
+    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref, **kw: candidates)
+
+    def fake_enrich(events, settings):
+        for i, e in enumerate(events):
+            e.tags = ["music/folk"] if i == 0 else []  # only tag the first
+
+    monkeypatch.setattr(research_job_mod, "enrich_events", fake_enrich)
+
+    result = research_job_mod.run_research_job(repo)
+
+    assert result["inserted"] == 2
+    assert result["tagged"] == 1
+    assert result["tag_coverage"] == 0.5
+    tagged_titles = {e.title for e in repo.events.values() if e.tags}
+    assert tagged_titles == {"Show 1"}

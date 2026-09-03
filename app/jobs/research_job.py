@@ -16,6 +16,7 @@ from app.logging_config import log_job_run
 from app.research.bandsintown import fetch_bandsintown_events
 from app.research.claude_research import rank_and_select
 from app.research.deterministic_search import run_deterministic_research_call as run_research_call
+from app.research.enrichment import enrich_events
 from app.research.preferences import build_preference_summary
 from app.research.source_registry import load_sources, record_source_run
 from app.research.ticketmaster import fetch_ticketmaster_events
@@ -69,6 +70,14 @@ def run_research_job(repo: Repository, settings: Settings | None = None) -> dict
     if rejected:
         logger.info("research_candidates_rejected", extra={"job_fields": {"rejected": rejected}})
 
+    # Enrichment before ranking/storage — Phase 3's matching needs tags to
+    # score candidates, and inserts need them persisted. One batched call
+    # for the whole run; never blocks or shrinks it on failure (see
+    # app.research.enrichment).
+    enrich_events(validated, settings)
+    tagged = sum(1 for e in validated if e.tags)
+    tag_coverage = tagged / len(validated) if validated else 0.0
+
     if len(validated) > EVENT_CAP:
         candidate_summaries = [
             {
@@ -113,6 +122,8 @@ def run_research_job(repo: Repository, settings: Settings | None = None) -> dict
         validated=len(validated),
         rejected=len(rejected),
         inserted=len(inserted),
+        tagged=tagged,
+        tag_coverage=round(tag_coverage, 2),
         dry_run=settings.dry_run,
     )
     return {
@@ -123,4 +134,6 @@ def run_research_job(repo: Repository, settings: Settings | None = None) -> dict
         "rejected": len(rejected),
         "inserted": len(inserted),
         "inserted_events": inserted,
+        "tagged": tagged,
+        "tag_coverage": tag_coverage,
     }

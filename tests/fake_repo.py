@@ -46,6 +46,10 @@ class FakeRepository:
             source=event.source,
             discovered_at=now_utc(),
             calendar_event_id=None,
+            tags=list(event.tags),
+            entities=list(event.entities),
+            gist=event.gist,
+            tag_confidence=event.tag_confidence,
         )
         self.events[event_id] = record
         return record
@@ -55,6 +59,18 @@ class FakeRepository:
 
     def set_calendar_event_id(self, event_id: UUID, calendar_event_id: str) -> None:
         self.events[event_id].calendar_event_id = calendar_event_id
+
+    def update_event_enrichment(
+        self, event_id: UUID, tags: list[str], entities: list[dict], gist, tag_confidence
+    ) -> None:
+        event = self.events[event_id]
+        event.tags = tags
+        event.entities = entities
+        event.gist = gist
+        event.tag_confidence = tag_confidence
+
+    def get_events_with_empty_tags(self, limit: int = 200) -> list[Event]:
+        return [e for e in self.events.values() if not e.tags][:limit]
 
     def get_events_awaiting_calendar_write(self) -> list[Event]:
         yes_people: dict[UUID, set[str]] = {}

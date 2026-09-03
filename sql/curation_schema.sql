@@ -29,3 +29,18 @@ create table if not exists source_runs (
   blocked_marker_seen boolean not null default false
 );
 create index if not exists idx_source_runs_source on source_runs (source_id, run_at desc);
+
+-- Phase 2: enrichment & tagging pass. Applied to both `events` and
+-- `events_sandbox` so tagging is testable via the existing
+-- sandbox/run_sandbox_research.py flow (Repository(events_table=...)
+-- redirects every event method, including insert_event, at whichever
+-- table — the sandbox needs the same columns to stay a true mirror).
+alter table events add column if not exists tags text[] default '{}';
+alter table events add column if not exists entities jsonb default '[]'; -- [{"name":..., "role":"performer|author|speaker"}]
+alter table events add column if not exists gist text;
+alter table events add column if not exists tag_confidence real;
+
+alter table events_sandbox add column if not exists tags text[] default '{}';
+alter table events_sandbox add column if not exists entities jsonb default '[]';
+alter table events_sandbox add column if not exists gist text;
+alter table events_sandbox add column if not exists tag_confidence real;
