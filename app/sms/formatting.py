@@ -35,13 +35,45 @@ def gsm7_safe(text: str) -> str:
     return "".join(c for c in text if ord(c) < 128)
 
 
+def _humanize_match_reason(reason: str) -> str | None:
+    """Curation layer, Phase 3 — turns a matching.py reason code (e.g.
+    "declared:music/folk", "learned:venue-2-yes") into a short trailing
+    clause for the ballot line. Unknown/malformed codes return None rather
+    than raising — a missing "why" is better than a broken SMS."""
+    kind, _, rest = reason.partition(":")
+    if not rest:
+        return None
+    if kind == "declared":
+        return f"you like {rest.rsplit('/', 1)[-1]}"
+    if kind == "entity":
+        return f"features {rest}"
+    if kind == "learned":
+        if rest.startswith("tag-"):
+            tag = rest[len("tag-"):].rsplit("-", 2)[0]
+            return f"similar to {tag.rsplit('/', 1)[-1]} you've liked"
+        if rest.startswith("venue-"):
+            return "at a venue you've liked"
+        if rest.startswith("entity-"):
+            name = rest[len("entity-"):].rsplit("-", 2)[0]
+            return f"you've liked {name} before"
+        return None
+    if kind == "exemplar":
+        return f"matches {rest}'s taste"
+    return None
+
+
 def event_label(event: Event) -> str:
     title_part = gsm7_safe(event.title)
     venue = gsm7_safe(event.venue) if event.venue else None
     if venue and venue.lower() not in title_part.lower():
         title_part = f"{title_part} at {venue}"
     price = gsm7_safe(event.price_range) if event.price_range else "free"
-    return f"{format_event_time(event.start_at)} - {title_part} ({price})"
+    label = f"{format_event_time(event.start_at)} - {title_part} ({price})"
+    if event.match_reasons:
+        why = _humanize_match_reason(event.match_reasons[0])
+        if why:
+            label = f"{label} - {gsm7_safe(why)}"
+    return label
 
 
 def ballot_line(list_number: int, event: Event) -> str:

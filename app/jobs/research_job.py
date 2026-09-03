@@ -17,7 +17,8 @@ from app.research.bandsintown import fetch_bandsintown_events
 from app.research.claude_research import rank_and_select
 from app.research.deterministic_search import run_deterministic_research_call as run_research_call
 from app.research.enrichment import enrich_events
-from app.research.preferences import build_preference_summary
+from app.research.matching import select_with_matching
+from app.research.preferences import build_preference_summary, build_preference_weights
 from app.research.source_registry import load_sources, record_source_run
 from app.research.ticketmaster import fetch_ticketmaster_events
 from app.research.validation import validate_candidate
@@ -78,7 +79,21 @@ def run_research_job(repo: Repository, settings: Settings | None = None) -> dict
     tagged = sum(1 for e in validated if e.tags)
     tag_coverage = tagged / len(validated) if validated else 0.0
 
-    if len(validated) > EVENT_CAP:
+    profiles = {"aaron": repo.get_taste_profile("aaron"), "tay": repo.get_taste_profile("tay")}
+    any_profile_set = any(
+        profile.get("hard_excludes") or profile.get("include_tags")
+        or profile.get("include_entities") or profile.get("exemplars")
+        for profile in profiles.values()
+    )
+
+    if any_profile_set:
+        # A hard exclude is a genuine constraint, not just a ranking signal
+        # — it must apply even to a candidate set at or under EVENT_CAP, so
+        # this branch runs regardless of len(validated) (unlike the legacy
+        # rank_and_select path below, which only fires over the cap).
+        weights = build_preference_weights(repo)
+        final_events = select_with_matching(validated, profiles, weights, EVENT_CAP)
+    elif len(validated) > EVENT_CAP:
         candidate_summaries = [
             {
                 "event_key": e.event_key,
@@ -107,7 +122,12 @@ def run_research_job(repo: Repository, settings: Settings | None = None) -> dict
     inserted = []
     for event_in in final_events:
         try:
-            inserted.append(repo.insert_event(event_in))
+            inserted_event = repo.insert_event(event_in)
+            # match_reasons is in-memory only (not a DB column — see
+            # models.EventIn.match_reasons) — insert_event's row doesn't
+            # carry it, so copy it onto the object insert_event returns.
+            inserted_event.match_reasons = event_in.match_reasons
+            inserted.append(inserted_event)
         except Exception:
             logger.exception(
                 "event_insert_failed", extra={"job_fields": {"event_key": event_in.event_key}}

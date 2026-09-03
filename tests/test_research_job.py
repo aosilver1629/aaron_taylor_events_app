@@ -169,3 +169,81 @@ def test_enrichment_tags_flow_through_to_inserted_events(monkeypatch):
     assert result["tag_coverage"] == 0.5
     tagged_titles = {e.title for e in repo.events.values() if e.tags}
     assert tagged_titles == {"Show 1"}
+
+
+def test_empty_profiles_leave_selection_unchanged(monkeypatch):
+    """Curation layer Phase 3 regression guard: with both taste profiles
+    empty (FakeRepository's default), matching.select_with_matching must
+    not run — behavior stays byte-identical to the pre-Phase-3 cap logic."""
+    repo = FakeRepository()
+    monkeypatch.setattr(research_job_mod, "fetch_ticketmaster_events", lambda s, window_days=21: [])
+    monkeypatch.setattr(research_job_mod, "fetch_bandsintown_events", lambda s: [])
+
+    candidates = [_candidate(f"Show {i}", venue=f"Venue {i}") for i in range(research_job_mod.EVENT_CAP)]
+    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref, **kw: candidates)
+
+    def fail_matching(*a, **k):
+        raise AssertionError("select_with_matching should not run when both profiles are empty")
+
+    monkeypatch.setattr(research_job_mod, "select_with_matching", fail_matching)
+
+    result = research_job_mod.run_research_job(repo)
+    assert result["inserted"] == research_job_mod.EVENT_CAP
+
+
+def test_hard_exclude_holds_even_at_or_under_cap(monkeypatch):
+    """The one product invariant: a hard exclude is a genuine constraint,
+    not just a ranking signal, so matching must run (and filter) even when
+    the candidate set is at/under EVENT_CAP — the legacy rank_and_select
+    path only fires over the cap and would never apply this filter."""
+    repo = FakeRepository()
+    repo.taste_profiles["aaron"] = {
+        "person": "aaron", "hard_excludes": ["music/rock"],
+        "include_tags": [], "include_entities": [], "exemplars": [],
+    }
+    monkeypatch.setattr(research_job_mod, "fetch_ticketmaster_events", lambda s, window_days=21: [])
+    monkeypatch.setattr(research_job_mod, "fetch_bandsintown_events", lambda s: [])
+
+    candidates = [_candidate("Rock Show"), _candidate("Folk Show", venue="Other Venue")]
+    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref, **kw: candidates)
+
+    def fake_enrich(events, settings):
+        for e in events:
+            e.tags = ["music/rock"] if e.title == "Rock Show" else ["music/folk"]
+
+    monkeypatch.setattr(research_job_mod, "enrich_events", fake_enrich)
+
+    def fail_rank(*a, **k):
+        raise AssertionError("rank_and_select should not run when a profile is set")
+
+    monkeypatch.setattr(research_job_mod, "rank_and_select", fail_rank)
+
+    result = research_job_mod.run_research_job(repo)
+
+    assert result["inserted"] == 1
+    assert list(repo.events.values())[0].title == "Folk Show"
+
+
+def test_match_reasons_copied_onto_inserted_events(monkeypatch):
+    repo = FakeRepository()
+    repo.taste_profiles["aaron"] = {
+        "person": "aaron", "hard_excludes": [], "include_tags": ["music/folk"],
+        "include_entities": [], "exemplars": [],
+    }
+    monkeypatch.setattr(research_job_mod, "fetch_ticketmaster_events", lambda s, window_days=21: [])
+    monkeypatch.setattr(research_job_mod, "fetch_bandsintown_events", lambda s: [])
+
+    candidates = [_candidate("Folk Show")]
+    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref, **kw: candidates)
+
+    def fake_enrich(events, settings):
+        for e in events:
+            e.tags = ["music/folk"]
+
+    monkeypatch.setattr(research_job_mod, "enrich_events", fake_enrich)
+
+    result = research_job_mod.run_research_job(repo)
+
+    assert result["inserted"] == 1
+    inserted = result["inserted_events"][0]
+    assert inserted.match_reasons == ["declared:music/folk"]

@@ -236,7 +236,7 @@ class Repository:
         """
         res = (
             self._client.table("ballots")
-            .select("response,event_id,person,events(category,venue)")
+            .select("response,event_id,person,events(category,venue,tags,entities)")
             .in_("response", ["yes", "no"])
             .order("responded_at", desc=True)
             .limit(limit)
@@ -302,6 +302,38 @@ class Repository:
                 "consecutive_zero_runs": consecutive_zero_runs,
             }
         ).eq("id", str(source_id)).execute()
+
+    # ---- taste_profiles (curation layer, Phase 3) -------------------------
+
+    _EMPTY_PROFILE_DEFAULTS = {
+        "hard_excludes": [],
+        "include_tags": [],
+        "include_entities": [],
+        "exemplars": [],
+    }
+
+    def get_taste_profile(self, person: str) -> dict:
+        """Lazily creates an empty profile row on first touch — empty
+        profile = today's behavior, so this ships dark per spec."""
+        res = self._client.table("taste_profiles").select("*").eq("person", person).limit(1).execute()
+        if res.data:
+            return res.data[0]
+        insert_res = (
+            self._client.table("taste_profiles")
+            .insert({"person": person, **self._EMPTY_PROFILE_DEFAULTS})
+            .execute()
+        )
+        return insert_res.data[0]
+
+    def update_taste_profile(self, person: str, **fields) -> dict:
+        res = self._client.table("taste_profiles").update(fields).eq("person", person).execute()
+        if res.data:
+            return res.data[0]
+        # No existing row to update (profile never lazily created) — insert
+        # it directly with the given fields on top of the empty defaults.
+        row = {**self._EMPTY_PROFILE_DEFAULTS, "person": person, **fields}
+        insert_res = self._client.table("taste_profiles").insert(row).execute()
+        return insert_res.data[0]
 
 
 def new_uuid() -> UUID:

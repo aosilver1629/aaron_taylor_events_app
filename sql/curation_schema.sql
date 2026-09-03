@@ -44,3 +44,16 @@ alter table events_sandbox add column if not exists tags text[] default '{}';
 alter table events_sandbox add column if not exists entities jsonb default '[]';
 alter table events_sandbox add column if not exists gist text;
 alter table events_sandbox add column if not exists tag_confidence real;
+
+-- Phase 3: declarative taste profile. Empty profile = today's behavior
+-- (dark-launch safe) — both people get a lazily-created empty row the
+-- first time GET/POST /profile/{person} or the matching step touches them.
+create table if not exists taste_profiles (
+  id uuid primary key default gen_random_uuid(),
+  person text unique not null,             -- 'aaron' | 'tay'
+  hard_excludes text[] default '{}',       -- taxonomy nodes
+  include_tags text[] default '{}',        -- taxonomy nodes
+  include_entities text[] default '{}',    -- normalized names
+  exemplars text[] default '{}',           -- max 5, each <= 200 chars (enforced in app)
+  updated_at timestamptz default now()
+);

@@ -23,6 +23,7 @@ class FakeRepository:
         # raw SQL (sql/seed_sources.sql), not through the app.
         self.sources: dict[UUID, dict] = {}
         self.source_runs: list[dict] = []
+        self.taste_profiles: dict[str, dict] = {}
 
     # ---- events ----
 
@@ -147,6 +148,8 @@ class FakeRepository:
                     "events": {
                         "category": event.category if event else None,
                         "venue": event.venue if event else None,
+                        "tags": event.tags if event else [],
+                        "entities": event.entities if event else [],
                     },
                 }
             )
@@ -192,3 +195,21 @@ class FakeRepository:
             self.sources[source_id]["status"] = status
             self.sources[source_id]["status_reason"] = status_reason
             self.sources[source_id]["consecutive_zero_runs"] = consecutive_zero_runs
+
+    # ---- taste_profiles (curation layer, Phase 3) ----
+
+    def get_taste_profile(self, person: str) -> dict:
+        if person not in self.taste_profiles:
+            self.taste_profiles[person] = {
+                "person": person,
+                "hard_excludes": [],
+                "include_tags": [],
+                "include_entities": [],
+                "exemplars": [],
+            }
+        return self.taste_profiles[person]
+
+    def update_taste_profile(self, person: str, **fields) -> dict:
+        profile = self.get_taste_profile(person)
+        profile.update(fields)
+        return profile

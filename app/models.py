@@ -40,6 +40,12 @@ class EventIn:
     entities: list[dict] = field(default_factory=list)  # [{"name": ..., "role": "performer|author|speaker"}]
     gist: str | None = None
     tag_confidence: float | None = None
+    # Curation layer, Phase 3 (taste-profile matching) — why this event was
+    # selected this run. In-memory only, not a DB column: set by
+    # matching.select_with_matching, copied onto the Event research_job.py
+    # gets back from insert_event (which doesn't persist it), and consumed
+    # immediately by the same run's ballot-send SMS formatting.
+    match_reasons: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -64,6 +70,9 @@ class Event:
     entities: list[dict] = field(default_factory=list)
     gist: str | None = None
     tag_confidence: float | None = None
+    # Curation layer, Phase 3 — see EventIn.match_reasons; not read back
+    # from a DB row (from_row never sets it), only assigned in-process.
+    match_reasons: list[str] = field(default_factory=list)
 
     @classmethod
     def from_row(cls, row: dict) -> "Event":

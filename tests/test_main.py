@@ -125,3 +125,104 @@ def test_ops_sources_shape(monkeypatch):
     assert entry["tier_in_use"] == "http/regex"
     assert entry["status"] == "healthy"
     assert entry["recent_candidates"] == [5]
+
+
+def test_get_profile_lazily_creates_empty_profile(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.get("/profile/aaron")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["person"] == "aaron"
+    assert body["hard_excludes"] == []
+
+
+def test_get_profile_unknown_person_404(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.get("/profile/nobody")
+
+    assert resp.status_code == 404
+
+
+def test_post_profile_saves_valid_fields(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.post(
+            "/profile/tay",
+            json={
+                "hard_excludes": ["music/rock"],
+                "include_tags": ["music/folk"],
+                "include_entities": ["Watchhouse"],
+                "exemplars": ["outdoor food markets with live music"],
+            },
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["hard_excludes"] == ["music/rock"]
+    assert body["include_entities"] == ["Watchhouse"]
+    assert repo.taste_profiles["tay"]["include_tags"] == ["music/folk"]
+
+
+def test_post_profile_rejects_invalid_tag(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.post("/profile/aaron", json={"hard_excludes": ["not/a/real/tag"]})
+
+    assert resp.status_code == 400
+
+
+def test_post_profile_rejects_too_many_exemplars(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.post("/profile/aaron", json={"exemplars": [f"e{i}" for i in range(6)]})
+
+    assert resp.status_code == 400
+
+
+def test_post_profile_rejects_overlong_exemplar(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.post("/profile/aaron", json={"exemplars": ["x" * 201]})
+
+    assert resp.status_code == 400
+
+
+def test_post_profile_unknown_person_404(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.post("/profile/nobody", json={"hard_excludes": []})
+
+    assert resp.status_code == 404
+
+
+def test_profile_editor_serves_html():
+    with TestClient(main_mod.app) as client:
+        resp = client.get("/profile-editor/aaron")
+
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+    assert "Event taste profile" in resp.text
+
+
+def test_profile_editor_unknown_person_404():
+    with TestClient(main_mod.app) as client:
+        resp = client.get("/profile-editor/nobody")
+
+    assert resp.status_code == 404

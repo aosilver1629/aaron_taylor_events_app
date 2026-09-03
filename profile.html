@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Event taste profile — SF Activities</title>
+<style>
+  :root { --ink:#1a1a1a; --muted:#5a5a5a; --rule:#e0ddd6; --bg:#fdfcfa; --panel:#f1efe9; --accent:#1a1a1a; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding:3rem 1.5rem 5rem;
+    background:var(--bg); color:var(--ink);
+    font:16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  main { max-width:34rem; margin:0 auto; }
+  h1 { font-size:1.5rem; line-height:1.25; margin:0 0 .5rem; letter-spacing:-.01em; }
+  .lede { color:var(--muted); margin:0 0 2rem; padding-bottom:1.5rem;
+          border-bottom:1px solid var(--rule); }
+  label { display:block; font-weight:600; font-size:.9rem; margin-bottom:.4rem; }
+  .hint { font-size:.8rem; color:var(--muted); margin:.4rem 0 0; }
+  fieldset {
+    border:1px solid var(--rule); border-radius:4px;
+    padding:1.1rem 1.1rem 1.25rem; margin:1.5rem 0 0;
+  }
+  legend { font-weight:600; padding:0 .4rem; }
+  .taxonomy-group { margin:0 0 1rem; }
+  .taxonomy-group:last-child { margin-bottom:0; }
+  .taxonomy-group h3 {
+    font-size:.85rem; text-transform:uppercase; letter-spacing:.03em;
+    color:var(--muted); margin:0 0 .5rem;
+  }
+  .chip-row { display:flex; flex-wrap:wrap; gap:.4rem; }
+  .chip {
+    display:inline-flex; align-items:center; gap:.3rem;
+    padding:.35rem .7rem; border-radius:999px; border:1px solid #c9c4b8;
+    background:#fff; font-size:.85rem; cursor:pointer; user-select:none;
+  }
+  .chip input { display:none; }
+  .chip.exclude.checked { background:#3a1a1a; border-color:#3a1a1a; color:#fff; }
+  .chip.include.checked { background:#1a3a1a; border-color:#1a3a1a; color:#fff; }
+  textarea, input[type="text"] {
+    width:100%; padding:.7rem .8rem; font-size:1rem; font-family:inherit;
+    border:1px solid #c9c4b8; border-radius:4px; background:#fff; color:var(--ink);
+  }
+  textarea:focus, input:focus, button:focus-visible { outline:2px solid #1a1a1a; outline-offset:2px; }
+  .exemplar-row { display:flex; gap:.5rem; margin:0 0 .5rem; }
+  .exemplar-row input { flex:1; }
+  .exemplar-row button { flex:0 0 auto; }
+  button {
+    font:inherit; cursor:pointer; border-radius:4px;
+  }
+  .remove-btn {
+    border:1px solid var(--rule); background:#fff; color:var(--muted); padding:0 .7rem;
+  }
+  .add-btn {
+    border:1px dashed #c9c4b8; background:transparent; color:var(--muted);
+    padding:.5rem .8rem; font-size:.85rem; width:100%; margin-top:.2rem;
+  }
+  .save-bar { display:flex; align-items:center; gap:1rem; margin-top:2rem; }
+  #save {
+    padding:.8rem 1.6rem; border:none; background:var(--accent); color:#fff;
+    font-weight:600; font-size:1rem;
+  }
+  #save:disabled { opacity:.5; cursor:default; }
+  #status { font-size:.9rem; color:var(--muted); }
+  #status.ok { color:#1a5a1a; }
+  #status.err { color:#8a1a1a; }
+  #person-picker { margin:0 0 2rem; }
+  #person-picker a {
+    display:inline-block; margin-right:.6rem; padding:.4rem .9rem; border-radius:999px;
+    border:1px solid #c9c4b8; color:var(--ink); text-decoration:none; font-size:.9rem;
+  }
+  #person-picker a.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Event taste profile</h1>
+  <p class="lede">
+    Hard excludes never make it onto a ballot — no matter what else about the
+    event looks good. Include tags/people give a mild boost. Exemplars are a
+    few events you loved, used only when there are more candidates than fit
+    on a single ballot.
+  </p>
+
+  <nav id="person-picker"></nav>
+
+  <fieldset id="excludes-field">
+    <legend>Hard excludes</legend>
+    <div id="excludes-groups"></div>
+  </fieldset>
+
+  <fieldset id="includes-field">
+    <legend>Include tags</legend>
+    <div id="includes-groups"></div>
+  </fieldset>
+
+  <fieldset id="entities-field">
+    <legend>Include people/artists/venues</legend>
+    <div id="entity-rows"></div>
+    <button type="button" class="add-btn" id="add-entity">+ add a name</button>
+    <p class="hint">Free text — a performer, author, or venue name. Matched loosely against event data.</p>
+  </fieldset>
+
+  <fieldset id="exemplars-field">
+    <legend>Exemplars</legend>
+    <div id="exemplar-rows"></div>
+    <button type="button" class="add-btn" id="add-exemplar">+ add an exemplar</button>
+    <p class="hint">Up to 5, 200 characters each. E.g. "Noise Pop shows at smaller venues" or "outdoor food markets with live music".</p>
+  </fieldset>
+
+  <div class="save-bar">
+    <button id="save">Save profile</button>
+    <span id="status"></span>
+  </div>
+</main>
+
+<script>
+const TAXONOMY = {
+  music: ["folk", "americana", "indie", "rock", "punk", "electronic", "hiphop", "jazz", "classical", "other"],
+  comedy: ["standup", "improv", "other"],
+  talks: ["author", "political", "science", "other"],
+  food: ["popup", "festival", "market"],
+  fairs: ["street-fair", "festival"],
+  art: ["gallery", "film", "theater"],
+  outdoor: ["run", "market", "other"],
+};
+
+const PEOPLE = ["aaron", "tay"];
+
+function currentPerson() {
+  const parts = location.pathname.split("/").filter(Boolean);
+  const p = parts[parts.length - 1];
+  return PEOPLE.includes(p) ? p : PEOPLE[0];
+}
+
+const person = currentPerson();
+let state = { hard_excludes: [], include_tags: [], include_entities: [], exemplars: [] };
+
+function renderPersonPicker() {
+  const nav = document.getElementById("person-picker");
+  nav.innerHTML = "";
+  for (const p of PEOPLE) {
+    const a = document.createElement("a");
+    a.href = `/profile-editor/${p}`;
+    a.textContent = p;
+    if (p === person) a.classList.add("active");
+    nav.appendChild(a);
+  }
+}
+
+function renderTagGroups(containerId, cls, selected) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = "";
+  for (const [top, subs] of Object.entries(TAXONOMY)) {
+    const group = document.createElement("div");
+    group.className = "taxonomy-group";
+    const h3 = document.createElement("h3");
+    h3.textContent = top;
+    group.appendChild(h3);
+    const row = document.createElement("div");
+    row.className = "chip-row";
+    for (const sub of subs) {
+      const tag = `${top}/${sub}`;
+      const label = document.createElement("label");
+      label.className = `chip ${cls}` + (selected.includes(tag) ? " checked" : "");
+      label.dataset.tag = tag;
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = selected.includes(tag);
+      input.addEventListener("change", () => {
+        label.classList.toggle("checked", input.checked);
+        toggleTag(cls === "exclude" ? "hard_excludes" : "include_tags", tag, input.checked);
+      });
+      label.appendChild(input);
+      label.appendChild(document.createTextNode(sub));
+      row.appendChild(label);
+    }
+    group.appendChild(row);
+    container.appendChild(group);
+  }
+}
+
+function toggleTag(field, tag, on) {
+  const set = new Set(state[field]);
+  if (on) set.add(tag); else set.delete(tag);
+  state[field] = [...set];
+}
+
+function renderListField(rowsId, field, placeholder, maxLen) {
+  const container = document.getElementById(rowsId);
+  container.innerHTML = "";
+  state[field].forEach((value, i) => {
+    const row = document.createElement("div");
+    row.className = "exemplar-row";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = value;
+    input.placeholder = placeholder;
+    if (maxLen) input.maxLength = maxLen;
+    input.addEventListener("input", () => { state[field][i] = input.value; });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "remove-btn";
+    remove.textContent = "remove";
+    remove.addEventListener("click", () => {
+      state[field].splice(i, 1);
+      renderListField(rowsId, field, placeholder, maxLen);
+    });
+    row.appendChild(input);
+    row.appendChild(remove);
+    container.appendChild(row);
+  });
+}
+
+function renderAll() {
+  renderPersonPicker();
+  renderTagGroups("excludes-groups", "exclude", state.hard_excludes);
+  renderTagGroups("includes-groups", "include", state.include_tags);
+  renderListField("entity-rows", "include_entities", "e.g. Watchhouse");
+  renderListField("exemplar-rows", "exemplars", "Describe an event you loved", 200);
+}
+
+document.getElementById("add-entity").addEventListener("click", () => {
+  state.include_entities.push("");
+  renderListField("entity-rows", "include_entities", "e.g. Watchhouse");
+});
+
+document.getElementById("add-exemplar").addEventListener("click", () => {
+  if (state.exemplars.length >= 5) return;
+  state.exemplars.push("");
+  renderListField("exemplar-rows", "exemplars", "Describe an event you loved", 200);
+});
+
+function setStatus(text, cls) {
+  const el = document.getElementById("status");
+  el.textContent = text;
+  el.className = cls || "";
+}
+
+document.getElementById("save").addEventListener("click", async () => {
+  const btn = document.getElementById("save");
+  btn.disabled = true;
+  setStatus("saving...");
+  const payload = {
+    hard_excludes: state.hard_excludes,
+    include_tags: state.include_tags,
+    include_entities: state.include_entities.map(s => s.trim()).filter(Boolean),
+    exemplars: state.exemplars.map(s => s.trim()).filter(Boolean),
+  };
+  try {
+    const res = await fetch(`/profile/${person}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setStatus(err.error || `save failed (${res.status})`, "err");
+      return;
+    }
+    state = await res.json();
+    renderAll();
+    setStatus("saved", "ok");
+  } catch (e) {
+    setStatus("save failed — network error", "err");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+(async function init() {
+  setStatus("loading...");
+  try {
+    const res = await fetch(`/profile/${person}`);
+    if (res.ok) {
+      const data = await res.json();
+      state = {
+        hard_excludes: data.hard_excludes || [],
+        include_tags: data.include_tags || [],
+        include_entities: data.include_entities || [],
+        exemplars: data.exemplars || [],
+      };
+    }
+  } catch (e) {
+    // fall through with empty state — a fresh profile is a valid state
+  }
+  renderAll();
+  setStatus("");
+})();
+</script>
+</body>
+</html>
