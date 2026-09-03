@@ -226,3 +226,42 @@ def test_profile_editor_unknown_person_404():
         resp = client.get("/profile-editor/nobody")
 
     assert resp.status_code == 404
+
+
+def test_parse_profile_text_returns_draft(monkeypatch):
+    def fake_parse(text, settings=None):
+        assert text == "no metal, I love Watchhouse"
+        return {
+            "hard_excludes": ["music/rock"],
+            "include_tags": [],
+            "include_entities": ["Watchhouse"],
+            "exemplars": [],
+        }
+
+    monkeypatch.setattr(main_mod, "parse_preference_text", fake_parse)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.post("/profile/aaron/parse", json={"text": "no metal, I love Watchhouse"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["hard_excludes"] == ["music/rock"]
+    assert body["include_entities"] == ["Watchhouse"]
+
+
+def test_parse_profile_text_requires_text(monkeypatch):
+    monkeypatch.setattr(main_mod, "parse_preference_text", lambda text, settings=None: {})
+
+    with TestClient(main_mod.app) as client:
+        resp = client.post("/profile/aaron/parse", json={"text": "   "})
+
+    assert resp.status_code == 400
+
+
+def test_parse_profile_text_unknown_person_404(monkeypatch):
+    monkeypatch.setattr(main_mod, "parse_preference_text", lambda text, settings=None: {})
+
+    with TestClient(main_mod.app) as client:
+        resp = client.post("/profile/nobody/parse", json={"text": "no metal"})
+
+    assert resp.status_code == 404

@@ -65,6 +65,15 @@
   #status { font-size:.9rem; color:var(--muted); }
   #status.ok { color:#1a5a1a; }
   #status.err { color:#8a1a1a; }
+  #parse-input { min-height:4.5rem; resize:vertical; }
+  #parse-btn {
+    padding:.6rem 1.2rem; border:1px solid var(--accent); background:#fff;
+    color:var(--accent); font-weight:600; font-size:.9rem;
+  }
+  #parse-btn:disabled { opacity:.5; cursor:default; }
+  #parse-status { font-size:.85rem; color:var(--muted); }
+  #parse-status.ok { color:#1a5a1a; }
+  #parse-status.err { color:#8a1a1a; }
   #person-picker { margin:0 0 2rem; }
   #person-picker a {
     display:inline-block; margin-right:.6rem; padding:.4rem .9rem; border-radius:999px;
@@ -84,6 +93,16 @@
   </p>
 
   <nav id="person-picker"></nav>
+
+  <fieldset id="parse-field">
+    <legend>Describe your preferences</legend>
+    <textarea id="parse-input" rows="3" placeholder="e.g. No metal or standup. I love Watchhouse and anything like an outdoor food market with live music."></textarea>
+    <div class="save-bar" style="margin-top:.6rem;">
+      <button type="button" id="parse-btn">Parse into profile</button>
+      <span id="parse-status"></span>
+    </div>
+    <p class="hint">This only fills in the sections below for you to review — nothing is saved until you hit Save profile.</p>
+  </fieldset>
 
   <fieldset id="excludes-field">
     <legend>Hard excludes</legend>
@@ -237,6 +256,76 @@ function setStatus(text, cls) {
   el.textContent = text;
   el.className = cls || "";
 }
+
+function setParseStatus(text, cls) {
+  const el = document.getElementById("parse-status");
+  el.textContent = text;
+  el.className = cls || "";
+}
+
+document.getElementById("parse-btn").addEventListener("click", async () => {
+  const input = document.getElementById("parse-input");
+  const text = input.value.trim();
+  if (!text) return;
+
+  const btn = document.getElementById("parse-btn");
+  btn.disabled = true;
+  setParseStatus("reading that...");
+
+  try {
+    const res = await fetch(`/profile/${person}/parse`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setParseStatus(err.error || `parse failed (${res.status})`, "err");
+      return;
+    }
+    const draft = await res.json();
+
+    const addedCounts = { hard_excludes: 0, include_tags: 0, include_entities: 0, exemplars: 0 };
+
+    for (const field of ["hard_excludes", "include_tags"]) {
+      const set = new Set(state[field]);
+      for (const tag of draft[field] || []) {
+        if (!set.has(tag)) { set.add(tag); addedCounts[field]++; }
+      }
+      state[field] = [...set];
+    }
+
+    const existingEntities = new Set(state.include_entities.map(e => e.toLowerCase()));
+    for (const name of draft.include_entities || []) {
+      if (!existingEntities.has(name.toLowerCase())) {
+        state.include_entities.push(name);
+        existingEntities.add(name.toLowerCase());
+        addedCounts.include_entities++;
+      }
+    }
+
+    for (const ex of draft.exemplars || []) {
+      if (state.exemplars.length >= 5) break;
+      if (!state.exemplars.includes(ex)) {
+        state.exemplars.push(ex);
+        addedCounts.exemplars++;
+      }
+    }
+
+    renderAll();
+    const total = Object.values(addedCounts).reduce((a, b) => a + b, 0);
+    if (total === 0) {
+      setParseStatus("nothing new found — try being more specific, or review the sections below", "ok");
+    } else {
+      setParseStatus(`added ${total} item${total === 1 ? "" : "s"} below — review, then hit Save profile`, "ok");
+    }
+    input.value = "";
+  } catch (e) {
+    setParseStatus("parse failed — network error", "err");
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 document.getElementById("save").addEventListener("click", async () => {
   const btn = document.getElementById("save");

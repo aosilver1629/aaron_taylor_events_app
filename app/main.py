@@ -18,6 +18,7 @@ from app.config import get_settings
 from app.db import Repository
 from app.logging_config import configure_logging
 from app.models import PEOPLE
+from app.research.profile_parser import parse_preference_text
 from app.research.source_registry import get_source_health
 from app.research.taxonomy import is_valid_tag
 from app.sms.provider import get_sms_provider
@@ -122,6 +123,23 @@ async def post_profile(person: str, request: Request):
 
     repo = Repository()
     return repo.update_taste_profile(person, **fields)
+
+
+@app.post("/profile/{person}/parse")
+async def parse_profile_text(person: str, request: Request):
+    """Curation layer — natural-language profile assist. Returns a draft
+    {hard_excludes, include_tags, include_entities, exemplars} for
+    profile.html to fold into its in-page state; never persists on its
+    own — only the user's own Save (POST /profile/{person}) writes
+    anything, so a misparsed sentence can be reviewed and deselected
+    before it becomes a real constraint."""
+    if person not in PEOPLE:
+        return _unknown_person(person)
+    body = await request.json()
+    text = body.get("text", "")
+    if not isinstance(text, str) or not text.strip():
+        return JSONResponse(status_code=400, content={"error": "text is required"})
+    return parse_preference_text(text)
 
 
 @app.get("/profile-editor/{person}", response_class=HTMLResponse)
