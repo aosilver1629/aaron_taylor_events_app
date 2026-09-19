@@ -58,6 +58,16 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/endpoints", response_class=HTMLResponse)
+def endpoints_doc() -> HTMLResponse:
+    """Serves endpoints.html — the living route-reference doc for this
+    app. Kept current by hand alongside the routes themselves; no DB
+    access, just reads the file off disk (same pattern as
+    /profile-editor/{person} serving profile.html)."""
+    html_path = Path(__file__).resolve().parent.parent / "endpoints.html"
+    return HTMLResponse(content=html_path.read_text())
+
+
 @app.get("/ops/sources")
 def ops_sources(city: str = "sf") -> dict:
     """Curation layer, Phase 1 — no UI, this JSON is the testable surface.

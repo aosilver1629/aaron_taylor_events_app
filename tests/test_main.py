@@ -53,6 +53,15 @@ def test_health():
     assert resp.json() == {"status": "ok"}
 
 
+def test_endpoints_doc_serves_html():
+    with TestClient(main_mod.app) as client:
+        resp = client.get("/endpoints")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+    assert "Route Ledger" in resp.text
+    assert "/ops/research/run" in resp.text
+
+
 def test_sms_webhook_happy_path(monkeypatch):
     settings = _settings()
     repo = FakeRepository()

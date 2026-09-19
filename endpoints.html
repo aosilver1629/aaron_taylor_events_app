@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Route Ledger — SF Activities</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    --paper: #eef0e9;
+    --paper-raised: #f7f8f2;
+    --ink: #1c2027;
+    --ink-soft: #565f56;
+    --accent: #2b3a67;
+    --accent-soft: #4a5a8f;
+    --rule: #cbd0c2;
+    --rule-strong: #a9b09c;
+    --sev-read-bg: #dfeae6;
+    --sev-read-fg: #235a4d;
+    --sev-write-bg: #f3e6d2;
+    --sev-write-fg: #7a5217;
+    --sev-real-bg: #f4dcd6;
+    --sev-real-fg: #8a2f22;
+    --shadow: rgba(28, 32, 39, 0.08);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #15181d;
+      --paper-raised: #1c2027;
+      --ink: #e9e7dd;
+      --ink-soft: #a4ac9f;
+      --accent: #8fa1de;
+      --accent-soft: #6c7fbf;
+      --rule: #333a40;
+      --rule-strong: #4a5259;
+      --sev-read-bg: #1c3430;
+      --sev-read-fg: #7fcdb8;
+      --sev-write-bg: #3a2f1c;
+      --sev-write-fg: #e2b876;
+      --sev-real-bg: #3a201c;
+      --sev-real-fg: #e79a89;
+      --shadow: rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #15181d;
+    --paper-raised: #1c2027;
+    --ink: #e9e7dd;
+    --ink-soft: #a4ac9f;
+    --accent: #8fa1de;
+    --accent-soft: #6c7fbf;
+    --rule: #333a40;
+    --rule-strong: #4a5259;
+    --sev-read-bg: #1c3430;
+    --sev-read-fg: #7fcdb8;
+    --sev-write-bg: #3a2f1c;
+    --sev-write-fg: #e2b876;
+    --sev-real-bg: #3a201c;
+    --sev-real-fg: #e79a89;
+    --shadow: rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { color-scheme: light dark; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Public Sans', system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  .wrap {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 3.5rem 1.5rem 6rem;
+  }
+
+  header.masthead {
+    margin-bottom: 2.5rem;
+  }
+
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+  }
+
+  .eyebrow::before {
+    content: '';
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    background: var(--accent);
+    display: inline-block;
+  }
+
+  h1 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-optical-sizing: auto;
+    font-weight: 600;
+    font-size: clamp(2.1rem, 5vw, 2.9rem);
+    line-height: 1.08;
+    letter-spacing: -0.01em;
+    margin: 0.5rem 0 0.75rem;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+
+  .lede {
+    color: var(--ink-soft);
+    max-width: 38rem;
+    font-size: 1.02rem;
+    margin: 0 0 1.75rem;
+  }
+
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  nav.jump {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--paper);
+    padding: 0.75rem 0;
+    margin: 0 -1.5rem 2rem;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    overflow-x: auto;
+  }
+
+  nav.jump a {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.74rem;
+    color: var(--ink-soft);
+    text-decoration: none;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    background: var(--paper-raised);
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  nav.jump a:hover,
+  nav.jump a:focus-visible {
+    color: var(--accent);
+    border-color: var(--accent-soft);
+  }
+
+  nav.jump a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .legend {
+    display: flex;
+    gap: 1.1rem;
+    flex-wrap: wrap;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    margin: 0 0 2.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
+
+  .swatch {
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 2px;
+    display: inline-block;
+  }
+
+  .swatch.read { background: var(--sev-read-fg); }
+  .swatch.write { background: var(--sev-write-fg); }
+  .swatch.real { background: var(--sev-real-fg); }
+
+  .route {
+    display: grid;
+    grid-template-columns: 2.25rem 1fr;
+    gap: 0 1.1rem;
+    padding: 2.25rem 0;
+    border-bottom: 1px solid var(--rule);
+    scroll-margin-top: 4rem;
+  }
+
+  .route:first-of-type { padding-top: 0; }
+  .route:last-of-type { border-bottom: none; }
+
+  .route-index {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--rule-strong);
+    padding-top: 0.3rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .route-head {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.9rem;
+  }
+
+  .method {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 0.2rem 0.5rem;
+    border: 1px solid var(--rule-strong);
+    border-radius: 4px;
+    color: var(--ink-soft);
+  }
+
+  .path {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.02rem;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .path .param { color: var(--accent-soft); }
+
+  .sev {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.22rem 0.55rem;
+    border-radius: 4px;
+    margin-left: auto;
+  }
+
+  .sev.read { background: var(--sev-read-bg); color: var(--sev-read-fg); }
+  .sev.write { background: var(--sev-write-bg); color: var(--sev-write-fg); }
+  .sev.real { background: var(--sev-real-bg); color: var(--sev-real-fg); }
+
+  .purpose { margin: 0 0 1.1rem; max-width: 34rem; }
+
+  h3.label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin: 1.1rem 0 0.55rem;
+    font-weight: 600;
+  }
+
+  ul.params {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  ul.params li {
+    padding-left: 1rem;
+    border-left: 2px solid var(--rule);
+  }
+
+  ul.params code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    background: var(--paper-raised);
+    padding: 0.05rem 0.35rem;
+    border-radius: 3px;
+    color: var(--ink);
+  }
+
+  .tag {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--ink-soft);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 0.05rem 0.35rem;
+    margin-left: 0.4rem;
+  }
+
+  .none-note {
+    color: var(--ink-soft);
+    font-style: italic;
+    font-size: 0.92rem;
+  }
+
+  .mutation-block {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--sev-write-fg);
+    border-radius: 0 6px 6px 0;
+    padding: 0.9rem 1.1rem;
+    font-size: 0.94rem;
+    box-shadow: 0 1px 2px var(--shadow);
+  }
+
+  .mutation-block.read { border-left-color: var(--sev-read-fg); }
+  .mutation-block.real { border-left-color: var(--sev-real-fg); }
+
+  .mutation-block ol {
+    margin: 0.3rem 0 0;
+    padding-left: 1.2rem;
+  }
+
+  .mutation-block li { margin-bottom: 0.4rem; }
+  .mutation-block li:last-child { margin-bottom: 0; }
+
+  .mutation-block code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    background: var(--paper);
+    padding: 0.05rem 0.3rem;
+    border-radius: 3px;
+  }
+
+  .note {
+    margin-top: 0.9rem;
+    padding: 0.75rem 1rem;
+    background: var(--sev-real-bg);
+    color: var(--sev-real-fg);
+    border-radius: 6px;
+    font-size: 0.88rem;
+  }
+
+  .note.mild { background: var(--sev-write-bg); color: var(--sev-write-fg); }
+
+  .note strong { font-weight: 600; }
+
+  .gaps {
+    margin-top: 1.1rem;
+    padding: 0;
+    list-style: none;
+  }
+
+  .gaps li {
+    padding: 0.6rem 0 0.6rem 1.1rem;
+    border-left: 2px solid var(--rule-strong);
+    margin-bottom: 0.6rem;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+  }
+
+  .gaps li:last-child { margin-bottom: 0; }
+  .gaps code { font-family: 'JetBrains Mono', monospace; color: var(--ink); }
+
+  footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--rule);
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    nav.jump a { transition: none; }
+  }
+
+  @media (max-width: 30rem) {
+    .route { grid-template-columns: 1.5rem 1fr; gap: 0 0.8rem; }
+    .path { font-size: 0.9rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">SF Activities &middot; internal reference</p>
+    <h1>Route Ledger</h1>
+    <p class="lede">
+      Every HTTP route the app exposes, in the order it's declared in
+      <code>app/main.py</code>. For each one: what it's for, what you have
+      to send it, and exactly how it touches the database &mdash; including
+      the two GETs that quietly aren't read-only, and the routes that cost
+      real money or text real people.
+    </p>
+  </header>
+
+  <nav class="jump" aria-label="Jump to route">
+    <a href="#health">health</a>
+    <a href="#ops-sources">ops/sources</a>
+    <a href="#ops-research-run">ops/research/run</a>
+    <a href="#ops-research-last-run">ops/research/last-run</a>
+    <a href="#profile-get">profile/{p}</a>
+    <a href="#profile-post">profile/{p}</a>
+    <a href="#profile-parse">profile/{p}/parse</a>
+    <a href="#profile-editor">profile-editor/{p}</a>
+    <a href="#sms">sms</a>
+  </nav>
+
+  <p class="legend">
+    <span><span class="swatch read"></span> no mutation</span>
+    <span><span class="swatch write"></span> writes the database</span>
+    <span><span class="swatch real"></span> real SMS sent or real API spend</span>
+  </p>
+
+  <div class="route" id="health">
+    <div class="route-index">01</div>
+    <div>
+      <div class="route-head">
+        <span class="method">GET</span>
+        <span class="path">/health</span>
+        <span class="sev read">no mutation</span>
+      </div>
+      <p class="purpose">Liveness check for Railway's health monitor (<code>healthcheckPath</code> in <code>railway.json</code>).</p>
+      <h3 class="label">Required input</h3>
+      <p class="none-note">None.</p>
+      <h3 class="label">Database</h3>
+      <div class="mutation-block read">None. Returns <code>{"status": "ok"}</code>.</div>
+    </div>
+  </div>
+
+  <div class="route" id="ops-sources">
+    <div class="route-index">02</div>
+    <div>
+      <div class="route-head">
+        <span class="method">GET</span>
+        <span class="path">/ops/sources</span>
+        <span class="sev read">no mutation</span>
+      </div>
+      <p class="purpose">Read-only visibility into the source registry &mdash; which research sources exist, what fetch/extract method each one's latest run actually used, its health status, and its last 8 runs' candidate counts. No UI; this JSON is the whole surface.</p>
+      <h3 class="label">Required input</h3>
+      <ul class="params">
+        <li><code>city</code> <span class="tag">query, optional</span><br>Defaults to <code>"sf"</code>.</li>
+      </ul>
+      <h3 class="label">Database</h3>
+      <div class="mutation-block read">None &mdash; reads <code>sources</code> and <code>source_runs</code> only.</div>
+    </div>
+  </div>
+
+  <div class="route" id="ops-research-run">
+    <div class="route-index">03</div>
+    <div>
+      <div class="route-head">
+        <span class="method">POST</span>
+        <span class="path">/ops/research/run</span>
+        <span class="sev real">real sms possible</span>
+      </div>
+      <p class="purpose">Manual trigger for Job&nbsp;1 (research). Runs the exact same <code>run_research_job</code> the scheduler calls every other morning &mdash; not a sandboxed dry run. Inserts whatever it finds into the real <code>events</code> table.</p>
+      <h3 class="label">Required input</h3>
+      <ul class="params">
+        <li><code>send_ballot</code> <span class="tag">query, optional</span><br>Boolean, defaults to <code>false</code>. Research always runs; the real SMS ballot only goes out to Aaron and Tay if this is explicitly <code>true</code>.</li>
+      </ul>
+      <h3 class="label">Database</h3>
+      <div class="mutation-block real">
+        Inserts new rows into <code>events</code> (tags/entities/gist/confidence included), records runs into <code>source_runs</code>, and reads/writes <code>taste_profiles</code> if either profile has content. Updates the in-memory state <code>GET /ops/research/last-run</code> reads back.
+        <div class="note">When <code>send_ballot=true</code>: also inserts <code>ballots</code> rows and sends a real SMS via the configured provider (logged to <code>sms_log</code>).</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="route" id="ops-research-last-run">
+    <div class="route-index">04</div>
+    <div>
+      <div class="route-head">
+        <span class="method">GET</span>
+        <span class="path">/ops/research/last-run</span>
+        <span class="sev read">no mutation</span>
+      </div>
+      <p class="purpose">Status and summary of the most recent research run in the current process &mdash; scheduler-triggered or manual. A lightweight &ldquo;did the last run work, and what did it find&rdquo; check.</p>
+      <h3 class="label">Required input</h3>
+      <p class="none-note">None.</p>
+      <h3 class="label">Database</h3>
+      <div class="mutation-block read">
+        None &mdash; reads in-memory state only.
+        <div class="note mild"><strong>Not durable:</strong> lives in a module-level variable in <code>app/jobs/research_job.py</code>; resets to &ldquo;no run yet&rdquo; on every restart or redeploy. For durable history, Railway's structured logs are the source of truth.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="route" id="profile-get">
+    <div class="route-index">05</div>
+    <div>
+      <div class="route-head">
+        <span class="method">GET</span>
+        <span class="path">/profile/<span class="param">{person}</span></span>
+        <span class="sev write">writes db</span>
+      </div>
+      <p class="purpose">Fetch a taste profile &mdash; <code>hard_excludes</code>, <code>include_tags</code>, <code>include_entities</code>, <code>exemplars</code> &mdash; for <code>profile.html</code> or any client.</p>
+      <h3 class="label">Required input</h3>
+      <ul class="params">
+        <li><code>person</code> <span class="tag">path, required</span><br>Must be <code>"aaron"</code> or <code>"tay"</code> &mdash; anything else returns <code>404</code>.</li>
+      </ul>
+      <h3 class="label">Database</h3>
+      <div class="mutation-block">
+        This GET is not actually read-only: if the person has no row in <code>taste_profiles</code> yet, it's lazily inserted with all-empty defaults before the row is returned. Idempotent after the first call, not on it.
+      </div>
+    </div>
+  </div>
+
+  <div class="route" id="profile-post">
+    <div class="route-index">06</div>
+    <div>
+      <div class="route-head">
+        <span class="method">POST</span>
+        <span class="path">/profile/<span class="param">{person}</span></span>
+        <span class="sev write">writes db</span>
+      </div>
+      <p class="purpose">Save a taste profile. This is what <code>profile.html</code>'s Save button calls &mdash; the only route that makes a preference real. A partial update, not a replace-all: any field left out of the request body keeps its previously stored value.</p>
+      <h3 class="label">Required input</h3>
+      <ul class="params">
+        <li><code>person</code> <span class="tag">path, required</span><br>Must be <code>"aaron"</code> or <code>"tay"</code>, else <code>404</code>.</li>
+        <li><code>hard_excludes</code> <span class="tag">body, optional</span><br>List of strings; each must be a valid taxonomy tag (<code>"top/sub"</code>), else <code>400</code>.</li>
+        <li><code>include_tags</code> <span class="tag">body, optional</span><br>Same validation as <code>hard_excludes</code>.</li>
+        <li><code>include_entities</code> <span class="tag">body, optional</span><br>List of strings, type-checked only.</li>
+        <li><code>exemplars</code> <span class="tag">body, optional</span><br>List of strings; max 5, each &le;200 characters, else <code>400</code>.</li>
+      </ul>
+      <h3 class="label">Database</h3>
+      <div class="mutation-block">
+        Updates the caller's row in <code>taste_profiles</code> with whichever fields were present (inserts the row first if none exists). A validation failure returns <code>400</code> and writes nothing.
+      </div>
+    </div>
+  </div>
+
+  <div class="route" id="profile-parse">
+    <div class="route-index">07</div>
+    <div>
+      <div class="route-head">
+        <span class="method">POST</span>
+        <span class="path">/profile/<span class="param">{person}</span>/parse</span>
+        <span class="sev real">real api spend</span>
+      </div>
+      <p class="purpose">Natural-language preference assist. Turns a free-text description &mdash; &ldquo;no metal, I love Watchhouse and outdoor food markets&rdquo; &mdash; into a <em>draft</em> profile for the client to fold into its state and review.</p>
+      <h3 class="label">Required input</h3>
+      <ul class="params">
+        <li><code>person</code> <span class="tag">path, required</span><br>Must be <code>"aaron"</code> or <code>"tay"</code>, else <code>404</code>.</li>
+        <li><code>text</code> <span class="tag">body, required</span><br>Non-empty string, else <code>400</code>.</li>
+      </ul>
+      <h3 class="label">Database</h3>
+      <div class="mutation-block real">
+        None. Makes a real, billed Anthropic call but never writes <code>taste_profiles</code> itself &mdash; only the user's own subsequent <code>POST /profile/{person}</code>, after reviewing the draft, persists anything. A misparsed sentence should never silently become a hard constraint.
+      </div>
+    </div>
+  </div>
+
+  <div class="route" id="profile-editor">
+    <div class="route-index">08</div>
+    <div>
+      <div class="route-head">
+        <span class="method">GET</span>
+        <span class="path">/profile-editor/<span class="param">{person}</span></span>
+        <span class="sev read">no mutation</span>
+      </div>
+      <p class="purpose">Serves the <code>profile.html</code> editor page &mdash; taxonomy chips, entity list, exemplar list, natural-language box. The page's own JS reads <code>person</code> back out of the URL and calls the routes above on the same origin.</p>
+      <h3 class="label">Required input</h3>
+      <ul class="params">
+        <li><code>person</code> <span class="tag">path, required</span><br>Must be <code>"aaron"</code> or <code>"tay"</code>, else <code>404</code>.</li>
+      </ul>
+      <h3 class="label">Database</h3>
+      <div class="mutation-block read">None &mdash; reads <code>profile.html</code> off disk. (Its own later <code>fetch</code> to route&nbsp;05 still triggers that lazy insert, just not this route.)</div>
+    </div>
+  </div>
+
+  <div class="route" id="sms">
+    <div class="route-index">09</div>
+    <div>
+      <div class="route-head">
+        <span class="method">POST</span>
+        <span class="path">/sms</span>
+        <span class="sev real">real sms</span>
+      </div>
+      <p class="purpose">The Twilio inbound webhook &mdash; the only route real end users actually hit. Handles opt-out/opt-in/help keywords and resolves ballot replies (&ldquo;1, 3, 5&rdquo; / &ldquo;none&rdquo; / &ldquo;the market one&rdquo;) against the sender's most recent ballot batch.</p>
+      <h3 class="label">Required input</h3>
+      <ul class="params">
+        <li><code>From</code> <span class="tag">form, required</span><br>Sender's number. Must exactly match Aaron's or Tay's &mdash; anything else is silently dropped, no reply, no log.</li>
+        <li><code>Body</code> <span class="tag">form, required</span><br>The SMS text.</li>
+        <li><code>X-Twilio-Signature</code> <span class="tag">header, conditional</span><br>Verified only when live (<code>SMS_PROVIDER=twilio</code>, <code>DRY_RUN=false</code>). A bad signature returns <code>403</code> before any DB access.</li>
+      </ul>
+      <h3 class="label">Database</h3>
+      <div class="mutation-block real">
+        <ol>
+          <li>Always: one row into <code>sms_log</code> for the inbound message.</li>
+          <li>STOP/START/HELP-family keyword: no ballot change &mdash; just a canned reply, logged outbound.</li>
+          <li>A real vote: every currently-open ballot in the sender's latest batch gets its <code>response</code> set to <code>"yes"</code> or <code>"no"</code> and <code>responded_at</code> stamped, then a confirmation SMS goes out.</li>
+        </ol>
+      </div>
+      <ul class="gaps">
+        <li>No persisted opt-out state exists anywhere in the schema &mdash; STOP/START/HELP are canned replies only; real suppression relies on Twilio/carrier-level handling.</li>
+        <li>Resolving ballots here never writes to Google Calendar &mdash; a separate scheduled job does that later, once both people have said yes.</li>
+        <li>Only the sender's single most recent batch is ever eligible &mdash; replying against an older one is impossible by design.</li>
+      </ul>
+    </div>
+  </div>
+
+  <footer>app/main.py &middot; 9 routes &middot; kept current by hand</footer>
+</div>
+</body>
+</html>
