@@ -10,6 +10,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from uuid import UUID
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -20,6 +21,7 @@ from app.jobs.ballot_job import run_ballot_send_job
 from app.jobs.research_job import get_last_run, run_research_job
 from app.logging_config import configure_logging
 from app.models import EventIn, PEOPLE
+from app.research.deterministic_search import KNOWN_PARSER_IDS
 from app.research.keys import compute_event_key
 from app.research.profile_parser import parse_preference_text
 from app.research.source_registry import get_source_health
@@ -85,13 +87,109 @@ def admin_ui() -> HTMLResponse:
     return HTMLResponse(content=html_path.read_text())
 
 
+VALID_SOURCE_KINDS = {"venue", "comedy", "fairs", "food"}
+# 0 (api) and 3 (browser) are reserved for fetch strategies no code path
+# implements yet — see deterministic_search.run_deterministic_research_call,
+# which only ever produces http/regex, http/llm, or search_fallback/llm.
+# Storing 0/3 is harmless (preferred_tier is never read by the pipeline),
+# so validation allows the full range rather than pretending it's 1/2/4 only.
+VALID_SOURCE_TIERS = {0, 1, 2, 3, 4}
+
+
+def _source_validation_error(body: dict) -> str | None:
+    """Shared by create and edit — returns an error message, or None if
+    every field present in body is valid. Only validates fields that are
+    actually present, since edit is a partial update."""
+    if "kind" in body and body["kind"] not in VALID_SOURCE_KINDS:
+        return f"kind must be one of {sorted(VALID_SOURCE_KINDS)}"
+    if "preferred_tier" in body:
+        tier = body["preferred_tier"]
+        if not isinstance(tier, int) or tier not in VALID_SOURCE_TIERS:
+            return f"preferred_tier must be one of {sorted(VALID_SOURCE_TIERS)}"
+    if "parser_id" in body and body["parser_id"] is not None:
+        if body["parser_id"] not in KNOWN_PARSER_IDS:
+            return (
+                f"parser_id must be one of {sorted(KNOWN_PARSER_IDS)} or null — "
+                "a new parser is a code change, not something this route can create"
+            )
+    return None
+
+
 @app.get("/ops/sources")
 def ops_sources(city: str = "sf") -> dict:
-    """Curation layer, Phase 1 — no UI, this JSON is the testable surface.
-    Per source: label, which fetch/extract methods the latest run actually
-    used, health status + reason, and the last 8 runs' candidate counts."""
+    """Curation layer, Phase 1. Every source for `city`, enabled or not (a
+    paused source stays visible/manageable rather than disappearing): label,
+    url/kind/preferred_tier/parser_id/extraction_rules/enabled (the editable
+    fields), which fetch/extract methods the latest run actually used,
+    health status + reason, and the last 8 runs' candidate counts."""
     repo = Repository()
     return {"sources": get_source_health(repo, city=city)}
+
+
+@app.post("/ops/sources")
+async def ops_sources_create(request: Request) -> dict:
+    """Add a new research source. Body: {label, url, kind, preferred_tier,
+    parser_id?, extraction_rules?, enabled?} — city defaults to "sf" (the
+    only city this app currently runs). Live on the very next research run
+    without any other change, since load_sources() reads this table."""
+    body = await request.json()
+    label = (body.get("label") or "").strip()
+    url = (body.get("url") or "").strip()
+    if not label or not url:
+        return JSONResponse(status_code=400, content={"error": "label and url are required"})
+    if "kind" not in body or "preferred_tier" not in body:
+        return JSONResponse(status_code=400, content={"error": "kind and preferred_tier are required"})
+
+    error = _source_validation_error(body)
+    if error:
+        return JSONResponse(status_code=400, content={"error": error})
+
+    repo = Repository()
+    existing_labels = {s["label"] for s in repo.get_all_sources(body.get("city", "sf"))}
+    if label in existing_labels:
+        return JSONResponse(status_code=400, content={"error": f"a source labeled {label!r} already exists"})
+
+    created = repo.insert_source(
+        label=label,
+        city=body.get("city", "sf"),
+        url=url,
+        kind=body["kind"],
+        preferred_tier=body["preferred_tier"],
+        parser_id=body.get("parser_id"),
+        extraction_rules=body.get("extraction_rules"),
+        enabled=body.get("enabled", True),
+    )
+    return created
+
+
+@app.patch("/ops/sources/{source_id}")
+async def ops_sources_update(source_id: str, request: Request) -> dict:
+    """Edit a source — partial update, same fields as POST /ops/sources, all
+    optional. This is also the enable/disable lever: {"enabled": false}
+    pauses it (load_sources() excludes it from the very next research run),
+    {"enabled": true} resumes it."""
+    body = await request.json()
+    error = _source_validation_error(body)
+    if error:
+        return JSONResponse(status_code=400, content={"error": error})
+
+    fields = {
+        k: v for k, v in body.items()
+        if k in {"label", "url", "kind", "preferred_tier", "parser_id", "extraction_rules", "enabled"}
+    }
+    if not fields:
+        return JSONResponse(status_code=400, content={"error": "no editable fields in body"})
+
+    try:
+        source_uuid = UUID(source_id)
+    except ValueError:
+        return JSONResponse(status_code=404, content={"error": f"unknown source: {source_id}"})
+
+    repo = Repository()
+    updated = repo.update_source(source_uuid, **fields)
+    if updated is None:
+        return JSONResponse(status_code=404, content={"error": f"unknown source: {source_id}"})
+    return updated
 
 
 @app.post("/ops/research/run")

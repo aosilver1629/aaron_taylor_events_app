@@ -321,6 +321,11 @@ _PARSERS = {
     "1015folsom": _parse_1015_folsom,
 }
 
+# Public — the only place a "does this parser_id actually exist" check
+# (e.g. validating a new/edited source) should look, rather than reaching
+# into _PARSERS directly.
+KNOWN_PARSER_IDS: frozenset[str] = frozenset(_PARSERS.keys())
+
 
 def _generate_pitches(events: list[dict], source_label: str, preference_summary: str) -> None:
     """Fills in event["pitch"] for a batch of regex-parsed events with one

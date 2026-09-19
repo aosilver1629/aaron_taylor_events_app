@@ -152,6 +152,133 @@ def test_ops_sources_shape(monkeypatch):
     assert entry["recent_candidates"] == [5]
 
 
+def test_ops_sources_includes_disabled(monkeypatch):
+    from uuid import uuid4
+
+    repo = FakeRepository()
+    source_id = uuid4()
+    repo.sources[source_id] = {
+        "id": source_id, "label": "Paused Source", "city": "sf", "url": "https://example.com",
+        "kind": "venue", "preferred_tier": 2, "parser_id": None, "extraction_rules": None,
+        "enabled": False, "status": "healthy", "status_reason": None, "consecutive_zero_runs": 0,
+    }
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.get("/ops/sources")
+
+    body = resp.json()
+    assert len(body["sources"]) == 1
+    assert body["sources"][0]["enabled"] is False
+
+
+def test_ops_sources_create(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.post(
+            "/ops/sources",
+            json={"label": "New Venue", "url": "https://newvenue.example.com", "kind": "venue", "preferred_tier": 2},
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["label"] == "New Venue"
+    assert body["enabled"] is True
+    assert len(repo.sources) == 1
+
+
+def test_ops_sources_create_rejects_duplicate_label(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+    payload = {"label": "New Venue", "url": "https://a.example.com", "kind": "venue", "preferred_tier": 2}
+
+    with TestClient(main_mod.app) as client:
+        first = client.post("/ops/sources", json=payload)
+        second = client.post("/ops/sources", json=payload)
+
+    assert first.status_code == 200
+    assert second.status_code == 400
+
+
+def test_ops_sources_create_rejects_invalid_kind(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.post(
+            "/ops/sources",
+            json={"label": "X", "url": "https://x.example.com", "kind": "nightclub", "preferred_tier": 2},
+        )
+
+    assert resp.status_code == 400
+
+
+def test_ops_sources_create_rejects_unknown_parser_id(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.post(
+            "/ops/sources",
+            json={
+                "label": "X", "url": "https://x.example.com", "kind": "venue",
+                "preferred_tier": 1, "parser_id": "made_up_parser",
+            },
+        )
+
+    assert resp.status_code == 400
+
+
+def test_ops_sources_update_toggles_enabled(monkeypatch):
+    from uuid import uuid4
+
+    repo = FakeRepository()
+    source_id = uuid4()
+    repo.sources[source_id] = {
+        "id": source_id, "label": "Test Venue", "city": "sf", "url": "https://example.com",
+        "kind": "venue", "preferred_tier": 2, "parser_id": None, "extraction_rules": None,
+        "enabled": True, "status": "healthy", "status_reason": None, "consecutive_zero_runs": 0,
+    }
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.patch(f"/ops/sources/{source_id}", json={"enabled": False})
+
+    assert resp.status_code == 200
+    assert resp.json()["enabled"] is False
+    assert repo.sources[source_id]["enabled"] is False
+
+
+def test_ops_sources_update_unknown_id_404(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.patch("/ops/sources/00000000-0000-0000-0000-000000000000", json={"enabled": False})
+
+    assert resp.status_code == 404
+
+
+def test_ops_sources_update_rejects_invalid_tier(monkeypatch):
+    from uuid import uuid4
+
+    repo = FakeRepository()
+    source_id = uuid4()
+    repo.sources[source_id] = {
+        "id": source_id, "label": "Test Venue", "city": "sf", "url": "https://example.com",
+        "kind": "venue", "preferred_tier": 2, "parser_id": None, "extraction_rules": None,
+        "enabled": True, "status": "healthy", "status_reason": None, "consecutive_zero_runs": 0,
+    }
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.patch(f"/ops/sources/{source_id}", json={"preferred_tier": 99})
+
+    assert resp.status_code == 400
+
+
 def test_get_profile_lazily_creates_empty_profile(monkeypatch):
     repo = FakeRepository()
     monkeypatch.setattr(main_mod, "Repository", lambda: repo)

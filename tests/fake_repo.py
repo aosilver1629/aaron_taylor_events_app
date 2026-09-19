@@ -168,6 +168,44 @@ class FakeRepository:
             if s.get("city", "sf") == city and s.get("enabled", True)
         ]
 
+    def get_all_sources(self, city: str = "sf") -> list[dict]:
+        return [s for s in self.sources.values() if s.get("city", "sf") == city]
+
+    def insert_source(
+        self,
+        label: str,
+        city: str,
+        url: str,
+        kind: str,
+        preferred_tier: int,
+        parser_id: str | None,
+        extraction_rules: str | None,
+        enabled: bool,
+    ) -> dict:
+        source_id = uuid4()
+        row = {
+            "id": source_id,
+            "label": label,
+            "city": city,
+            "url": url,
+            "kind": kind,
+            "preferred_tier": preferred_tier,
+            "parser_id": parser_id,
+            "extraction_rules": extraction_rules,
+            "enabled": enabled,
+            "status": "healthy",
+            "status_reason": None,
+            "consecutive_zero_runs": 0,
+        }
+        self.sources[source_id] = row
+        return row
+
+    def update_source(self, source_id, **fields) -> dict | None:
+        if source_id not in self.sources:
+            return None
+        self.sources[source_id].update(fields)
+        return self.sources[source_id]
+
     def insert_source_run(
         self, source_id, fetch_method: str, extract_method: str, candidates: int, blocked_marker_seen: bool
     ) -> None:

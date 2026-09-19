@@ -398,6 +398,8 @@
     <a href="#health">health</a>
     <a href="#admin">admin</a>
     <a href="#ops-sources">ops/sources</a>
+    <a href="#ops-sources-create">ops/sources (create)</a>
+    <a href="#ops-sources-update">ops/sources/{id}</a>
     <a href="#ops-research-run">ops/research/run</a>
     <a href="#ops-research-last-run">ops/research/last-run</a>
     <a href="#ops-events-approve">ops/events/approve</a>
@@ -438,7 +440,7 @@
         <span class="path">/admin</span>
         <span class="sev read">no mutation</span>
       </div>
-      <p class="purpose">Serves <code>admin.html</code> &mdash; a mobile-first admin app covering research preview + approve, taste-profile editing, and read-only source health. All backed by the JSON routes in this ledger, called client-side; this route itself does nothing but return the file. On this same origin (rather than hosted separately) specifically so those <code>fetch</code> calls aren't blocked by CORS &mdash; this app has no CORS middleware.</p>
+      <p class="purpose">Serves <code>admin.html</code> &mdash; a mobile-first admin app covering research preview + approve, taste-profile editing, and source management (add/edit/pause). All backed by the JSON routes in this ledger, called client-side; this route itself does nothing but return the file. On this same origin (rather than hosted separately) specifically so those <code>fetch</code> calls aren't blocked by CORS &mdash; this app has no CORS middleware.</p>
       <h3 class="label">Required input</h3>
       <p class="none-note">None.</p>
       <h3 class="label">Database</h3>
@@ -454,18 +456,63 @@
         <span class="path">/ops/sources</span>
         <span class="sev read">no mutation</span>
       </div>
-      <p class="purpose">Read-only visibility into the source registry &mdash; which research sources exist, what fetch/extract method each one's latest run actually used, its health status, and its last 8 runs' candidate counts. No UI; this JSON is the whole surface.</p>
+      <p class="purpose">Every research source for the city, enabled or paused &mdash; which fetch/extract method each one's latest run actually used, health status, last 8 runs' candidate counts, and every field the admin UI needs to edit or re-enable it. Backs the Sources tab in <code>/admin</code>.</p>
       <h3 class="label">Required input</h3>
       <ul class="params">
         <li><code>city</code> <span class="tag">query, optional</span><br>Defaults to <code>"sf"</code>.</li>
       </ul>
       <h3 class="label">Database</h3>
-      <div class="mutation-block read">None &mdash; reads <code>sources</code> and <code>source_runs</code> only.</div>
+      <div class="mutation-block read">None &mdash; reads <code>sources</code> and <code>source_runs</code> only.
+        <div class="note mild"><code>preferred_tier</code>/<code>parser_id</code>/<code>extraction_rules</code> are what a source is <em>expected</em> to use, set at creation &mdash; the research pipeline never reads them; it decides the real fetch/extract method fresh every run (that's <code>tier_in_use</code>). The two can disagree.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="route" id="ops-sources-create">
+    <div class="route-index">04</div>
+    <div>
+      <div class="route-head">
+        <span class="method">POST</span>
+        <span class="path">/ops/sources</span>
+        <span class="sev write">writes db</span>
+      </div>
+      <p class="purpose">Add a new research source. Live on the very next research run without any other change, since <code>load_sources()</code> reads straight from this table.</p>
+      <h3 class="label">Required input</h3>
+      <ul class="params">
+        <li><code>label</code> <span class="tag">body, required</span><br>Non-empty, must be unique &mdash; <code>400</code> if a source with this label already exists.</li>
+        <li><code>url</code> <span class="tag">body, required</span><br>Non-empty.</li>
+        <li><code>kind</code> <span class="tag">body, required</span><br>One of <code>venue</code> / <code>comedy</code> / <code>fairs</code> / <code>food</code>, else <code>400</code>.</li>
+        <li><code>preferred_tier</code> <span class="tag">body, required</span><br>Integer 0&ndash;4 (see the note on the GET above &mdash; 0 and 3 are reserved, no code path implements them yet), else <code>400</code>.</li>
+        <li><code>parser_id</code> <span class="tag">body, optional</span><br>Must be one of the parsers that actually exist in code (<code>chapel</code> / <code>gamh</code> / <code>1015folsom</code>) or omitted &mdash; a made-up id returns <code>400</code> rather than crashing a future research run.</li>
+        <li><code>extraction_rules</code> <span class="tag">body, optional</span><br>Free text, the LLM-extraction instruction template. Falls back to a generic per-kind default when omitted.</li>
+        <li><code>enabled</code> <span class="tag">body, optional</span><br>Defaults to <code>true</code>.</li>
+      </ul>
+      <h3 class="label">Database</h3>
+      <div class="mutation-block">Inserts one row into <code>sources</code>. Returns the created row.</div>
+    </div>
+  </div>
+
+  <div class="route" id="ops-sources-update">
+    <div class="route-index">05</div>
+    <div>
+      <div class="route-head">
+        <span class="method">PATCH</span>
+        <span class="path">/ops/sources/<span class="param">{source_id}</span></span>
+        <span class="sev write">writes db</span>
+      </div>
+      <p class="purpose">Edit a source &mdash; partial update, same fields and validation as <code>POST /ops/sources</code>, all optional. This is also the enable/disable lever: <code>{"enabled": false}</code> pauses a source (excluded from the very next research run via <code>load_sources()</code>), <code>{"enabled": true}</code> resumes it. No delete route &mdash; <code>source_runs.source_id</code> references <code>sources(id)</code>, so a hard delete either fails on the foreign key or needs a cascade that destroys the run history; pausing is the intended lever instead.</p>
+      <h3 class="label">Required input</h3>
+      <ul class="params">
+        <li><code>source_id</code> <span class="tag">path, required</span><br>Unknown or malformed id &mdash; <code>404</code>.</li>
+        <li>Any of <code>label</code> / <code>url</code> / <code>kind</code> / <code>preferred_tier</code> / <code>parser_id</code> / <code>extraction_rules</code> / <code>enabled</code> <span class="tag">body, optional</span><br>Same per-field validation as create. Empty body (no recognized fields) &mdash; <code>400</code>.</li>
+      </ul>
+      <h3 class="label">Database</h3>
+      <div class="mutation-block">Updates the matching row in <code>sources</code>. Returns the updated row.</div>
     </div>
   </div>
 
   <div class="route" id="ops-research-run">
-    <div class="route-index">04</div>
+    <div class="route-index">06</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -484,7 +531,7 @@
   </div>
 
   <div class="route" id="ops-research-last-run">
-    <div class="route-index">05</div>
+    <div class="route-index">07</div>
     <div>
       <div class="route-head">
         <span class="method">GET</span>
@@ -503,7 +550,7 @@
   </div>
 
   <div class="route" id="ops-events-approve">
-    <div class="route-index">06</div>
+    <div class="route-index">08</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -524,7 +571,7 @@
   </div>
 
   <div class="route" id="profile-get">
-    <div class="route-index">07</div>
+    <div class="route-index">09</div>
     <div>
       <div class="route-head">
         <span class="method">GET</span>
@@ -544,7 +591,7 @@
   </div>
 
   <div class="route" id="profile-post">
-    <div class="route-index">08</div>
+    <div class="route-index">10</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -568,7 +615,7 @@
   </div>
 
   <div class="route" id="profile-parse">
-    <div class="route-index">09</div>
+    <div class="route-index">11</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -589,7 +636,7 @@
   </div>
 
   <div class="route" id="profile-editor">
-    <div class="route-index">10</div>
+    <div class="route-index">12</div>
     <div>
       <div class="route-head">
         <span class="method">GET</span>
@@ -607,7 +654,7 @@
   </div>
 
   <div class="route" id="sms">
-    <div class="route-index">11</div>
+    <div class="route-index">13</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -637,7 +684,7 @@
     </div>
   </div>
 
-  <footer>app/main.py &middot; 11 routes &middot; kept current by hand</footer>
+  <footer>app/main.py &middot; 13 routes &middot; kept current by hand</footer>
 </div>
 </body>
 </html>

@@ -316,13 +316,37 @@
 
   .field-label { font-size: 0.78rem; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.03em; margin: 0 0 0.5rem; }
 
-  .source-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 0.75rem 0; border-bottom: 1px solid var(--rule); gap: 0.7rem; }
+  .source-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 0.85rem 0; border-bottom: 1px solid var(--rule); gap: 0.7rem; cursor: pointer; }
   .source-row:last-child { border-bottom: none; }
+  .source-row.paused { opacity: 0.55; }
   .source-row .name { font-weight: 700; font-size: 0.92rem; }
   .source-row .tier { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--ink-soft); margin-top: 0.15rem; }
+  .source-row .tier-note { font-size: 0.72rem; color: var(--ink-soft); margin-top: 0.1rem; }
+  .source-row .side { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; flex: 0 0 auto; }
   .sparkline { display: flex; align-items: flex-end; gap: 0.18rem; height: 1.8rem; margin-top: 0.5rem; }
   .sparkline i { display: block; width: 0.34rem; background: var(--rule); border-radius: 2px 2px 0 0; min-height: 3px; }
   .sparkline i.has { background: var(--accent); opacity: 0.85; }
+
+  .toggle { position: relative; width: 2.5rem; height: 1.5rem; flex: 0 0 auto; }
+  .toggle input { opacity: 0; width: 100%; height: 100%; margin: 0; position: absolute; cursor: pointer; z-index: 1; }
+  .toggle .track { position: absolute; inset: 0; background: var(--rule); border-radius: 999px; transition: background 0.15s; }
+  .toggle input:checked + .track { background: var(--ok); }
+  .toggle .knob { position: absolute; top: 0.15rem; left: 0.15rem; width: 1.2rem; height: 1.2rem; background: var(--card); border-radius: 50%; transition: transform 0.15s; box-shadow: 0 1px 2px var(--shadow); }
+  .toggle input:checked ~ .knob { transform: translateX(1rem); }
+
+  .tier-option {
+    display: flex; gap: 0.7rem; align-items: flex-start;
+    border: 1.5px solid var(--rule); border-radius: 12px; padding: 0.7rem 0.8rem; margin-bottom: 0.5rem;
+    cursor: pointer; background: var(--paper);
+  }
+  .tier-option.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--paper)); }
+  .tier-option.reserved { opacity: 0.5; cursor: not-allowed; }
+  .tier-option .dot { width: 1.1rem; height: 1.1rem; border-radius: 50%; border: 1.5px solid var(--rule); flex: 0 0 auto; margin-top: 0.1rem; display: flex; align-items: center; justify-content: center; }
+  .tier-option.on .dot { border-color: var(--accent); }
+  .tier-option.on .dot::after { content: ""; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--accent); }
+  .tier-option .name { font-weight: 700; font-size: 0.9rem; }
+  .tier-option .name .badge { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; margin-left: 0.4rem; padding: 0.1rem 0.4rem; border-radius: 999px; background: var(--warn-bg); color: var(--warn); }
+  .tier-option .tier-desc { font-size: 0.8rem; color: var(--ink-soft); margin-top: 0.15rem; line-height: 1.4; }
 
   .link-out { display: inline-block; margin-top: 0.5rem; font-size: 0.85rem; color: var(--accent); text-decoration: none; font-weight: 600; }
 
@@ -409,17 +433,63 @@
 
   <!-- SOURCES TAB -->
   <section class="panel" id="panel-sources">
+    <div id="sources-banner"></div>
+
     <div class="card" style="position:relative;">
       <button class="refresh-btn" id="refresh-sources" aria-label="Refresh">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v5h-5"/></svg>
       </button>
-      <h2>Source health</h2>
-      <p class="desc">Read-only. Label, which fetch/extract tier the latest run actually used, health status, and the last 8 runs' candidate counts.</p>
+      <h2>Sources</h2>
+      <p class="desc">Every source, paused ones included. Tap a card to edit; the switch pauses or resumes it without opening the editor.</p>
       <div id="sources-list"></div>
     </div>
 
-    <div class="banner warn">
-      <strong>Adding, editing, enabling or disabling a source isn't wired up yet.</strong> This view only reflects sources already seeded in the database. Ask your engineer — the case for the two small routes this needs (and why a delete route isn't recommended) is in the session's chat log.
+    <button class="btn secondary" id="add-source-btn">+ Add a source</button>
+
+    <!-- add/edit form, hidden until opened -->
+    <div class="card" id="source-form-card" style="display:none;">
+      <h2 id="source-form-title">Add a source</h2>
+
+      <div class="field-label">Label</div>
+      <input class="exemplar-input" id="src-label" placeholder="e.g. The Fillmore">
+      <div style="height:0.8rem"></div>
+
+      <div class="field-label">URL</div>
+      <input class="exemplar-input" id="src-url" placeholder="https://example.com/shows">
+      <div style="height:0.8rem"></div>
+
+      <div class="field-label">Kind</div>
+      <div class="segmented" id="src-kind-picker">
+        <button type="button" data-kind="venue" class="active">Venue</button>
+        <button type="button" data-kind="comedy">Comedy</button>
+        <button type="button" data-kind="fairs">Fairs</button>
+        <button type="button" data-kind="food">Food</button>
+      </div>
+
+      <div class="field-label">Expected tier</div>
+      <p class="desc" style="margin-top:-0.4rem;">A note about what this source is expected to use &mdash; the app always figures out the real fetch method fresh every run and reports it as "tier in use" below. Picking a tier here never forces that behavior.</p>
+      <div id="tier-picker"></div>
+
+      <div id="parser-picker-wrap" style="display:none; margin-top:0.9rem;">
+        <div class="field-label">Which parser</div>
+        <div class="segmented" id="parser-picker">
+          <button type="button" data-parser="chapel" class="active">Chapel</button>
+          <button type="button" data-parser="gamh">GAMH</button>
+          <button type="button" data-parser="1015folsom">1015 Folsom</button>
+        </div>
+        <p class="desc">Only these three parsers exist in code today &mdash; a new one is an engineering change, not something this form can create.</p>
+      </div>
+
+      <div style="margin-top:0.9rem;">
+        <div class="field-label">Extraction instructions (optional)</div>
+        <textarea id="src-extraction-rules" rows="4" placeholder="What Claude should look for on this page if there's no parser, or the parser finds nothing. Leave blank to use a generic default for this kind."></textarea>
+      </div>
+
+      <div style="height:1rem"></div>
+      <div id="source-form-banner"></div>
+      <button class="btn" id="save-source-btn">Save source</button>
+      <div style="height:0.5rem"></div>
+      <button class="btn secondary" id="cancel-source-btn">Cancel</button>
     </div>
   </section>
 
@@ -474,6 +544,17 @@ async function apiGet(path) {
 async function apiPost(path, payload) {
   const res = await fetch(path, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `request failed (${res.status})`);
+  return body;
+}
+
+async function apiPatch(path, payload) {
+  const res = await fetch(path, {
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
@@ -849,7 +930,31 @@ async function saveProfile() {
 
 // ---- SOURCES tab ------------------------------------------------------------
 
+// preferred_tier is stored but never read by the research pipeline itself —
+// deterministic_search decides the real fetch/extract method fresh every
+// run (see its module docstring). This is a note about what a source is
+// EXPECTED to use, not a switch, and the copy below says so. Tiers 0 and 3
+// are reserved: no code path produces "api" or "browser" as a real
+// fetch/extract method yet, so they're shown but not selectable.
+const TIER_ORDER = [1, 2, 4, 0, 3];
+const TIERS = {
+  1: { name: "Structured parser", reserved: false,
+       desc: "A parser written for this exact page's HTML. Fastest and most reliable, but only works for a site an engineer has already wired up." },
+  2: { name: "AI extraction", reserved: false,
+       desc: "Claude reads the page and pulls events out itself. Works on almost any site; costs a small amount per run." },
+  4: { name: "Search fallback", reserved: false,
+       desc: "Used automatically when a direct fetch is blocked or comes back empty — Claude searches the web instead." },
+  0: { name: "Direct API", reserved: true,
+       desc: "Reserved for a future direct API integration, like Ticketmaster/Bandsintown. Not available for a custom source yet." },
+  3: { name: "Browser render", reserved: true,
+       desc: "Reserved for JavaScript-heavy sites that need a real browser to load. Not implemented yet." },
+};
+function tierLabel(n) { return TIERS[n] ? TIERS[n].name : `tier ${n}`; }
+
 let sourcesLoaded = false;
+let sourcesCache = [];
+let editingSourceId = null; // null while adding a new source
+let sourceForm = { kind: "venue", tier: 1, parser: "chapel" };
 
 function statusPillClass(status) {
   return ["healthy", "degraded", "blocked", "silent"].includes(status) ? status : "silent";
@@ -860,30 +965,162 @@ async function loadSources() {
   el.innerHTML = `<div class="empty">Loading…</div>`;
   try {
     const data = await apiGet("/ops/sources");
-    const sources = data.sources || [];
+    sourcesCache = data.sources || [];
     sourcesLoaded = true;
-    if (!sources.length) { el.innerHTML = `<div class="empty">No enabled sources found.</div>`; return; }
-    el.innerHTML = "";
-    const max = Math.max(1, ...sources.flatMap(s => s.recent_candidates || [0]));
-    sources.forEach(s => {
-      const row = document.createElement("div");
-      row.className = "source-row";
-      const bars = (s.recent_candidates || []).slice().reverse()
-        .map(n => `<i class="${n > 0 ? "has" : ""}" style="height:${n > 0 ? Math.max(20, (n / max) * 100) : 6}%"></i>`).join("");
-      row.innerHTML = `
-        <div>
-          <div class="name">${s.label}</div>
-          <div class="tier">${s.tier_in_use || "no runs yet"}</div>
-          <div class="sparkline">${bars}</div>
-        </div>
-        <span class="pill ${statusPillClass(s.status)}">${s.status || "unknown"}</span>
-      `;
-      el.appendChild(row);
-    });
+    renderSourcesList();
   } catch (e) {
-    el.innerHTML = `<div class="empty">Couldn't load source health: ${e.message}</div>`;
+    el.innerHTML = `<div class="empty">Couldn't load sources: ${e.message}</div>`;
   }
 }
+
+function renderSourcesList() {
+  const el = document.getElementById("sources-list");
+  if (!sourcesCache.length) { el.innerHTML = `<div class="empty">No sources yet — add one below.</div>`; return; }
+  el.innerHTML = "";
+  const max = Math.max(1, ...sourcesCache.flatMap(s => s.recent_candidates || [0]));
+  sourcesCache.forEach(s => {
+    const row = document.createElement("div");
+    row.className = "source-row" + (s.enabled ? "" : " paused");
+    const bars = (s.recent_candidates || []).slice().reverse()
+      .map(n => `<i class="${n > 0 ? "has" : ""}" style="height:${n > 0 ? Math.max(20, (n / max) * 100) : 6}%"></i>`).join("");
+    row.innerHTML = `
+      <div>
+        <div class="name">${s.label}${s.enabled ? "" : ' <span class="pill silent">paused</span>'}</div>
+        <div class="tier-note">expects: ${tierLabel(s.preferred_tier)}</div>
+        <div class="tier">tier in use: ${s.tier_in_use || "no runs yet"}</div>
+        <div class="sparkline">${bars}</div>
+      </div>
+      <div class="side">
+        <span class="pill ${statusPillClass(s.status)}">${s.status || "unknown"}</span>
+        <label class="toggle" title="${s.enabled ? "Pause" : "Resume"}">
+          <input type="checkbox" ${s.enabled ? "checked" : ""}>
+          <span class="track"></span><span class="knob"></span>
+        </label>
+      </div>
+    `;
+    const toggle = row.querySelector(".toggle input");
+    toggle.addEventListener("click", (e) => e.stopPropagation());
+    toggle.addEventListener("change", (e) => toggleSourceEnabled(s, e.target.checked, e.target));
+    row.addEventListener("click", () => openSourceForm(s));
+    el.appendChild(row);
+  });
+}
+
+async function toggleSourceEnabled(source, enabled, checkbox) {
+  checkbox.disabled = true;
+  try {
+    const updated = await apiPatch(`/ops/sources/${source.id}`, { enabled });
+    Object.assign(source, updated);
+    renderSourcesList();
+    banner(document.getElementById("sources-banner"), `${source.label} ${enabled ? "resumed" : "paused"}.`, "ok");
+  } catch (e) {
+    checkbox.checked = !enabled;
+    banner(document.getElementById("sources-banner"), e.message, "err");
+  } finally {
+    checkbox.disabled = false;
+  }
+}
+
+function renderKindPicker() {
+  document.querySelectorAll("#src-kind-picker button").forEach(b => b.classList.toggle("active", b.dataset.kind === sourceForm.kind));
+}
+
+function renderParserPicker() {
+  document.querySelectorAll("#parser-picker button").forEach(b => b.classList.toggle("active", b.dataset.parser === sourceForm.parser));
+  document.getElementById("parser-picker-wrap").style.display = sourceForm.tier === 1 ? "block" : "none";
+}
+
+function renderTierPicker() {
+  const el = document.getElementById("tier-picker");
+  el.innerHTML = "";
+  TIER_ORDER.forEach(n => {
+    const t = TIERS[n];
+    const opt = document.createElement("div");
+    opt.className = "tier-option" + (sourceForm.tier === n ? " on" : "") + (t.reserved ? " reserved" : "");
+    opt.innerHTML = `
+      <span class="dot"></span>
+      <div>
+        <div class="name">${t.name}${t.reserved ? '<span class="badge">reserved</span>' : ""}</div>
+        <div class="tier-desc">${t.desc}</div>
+      </div>
+    `;
+    if (!t.reserved) {
+      opt.addEventListener("click", () => { sourceForm.tier = n; renderTierPicker(); renderParserPicker(); });
+    }
+    el.appendChild(opt);
+  });
+}
+
+document.querySelectorAll("#src-kind-picker button").forEach(btn => {
+  btn.addEventListener("click", () => { sourceForm.kind = btn.dataset.kind; renderKindPicker(); });
+});
+document.querySelectorAll("#parser-picker button").forEach(btn => {
+  btn.addEventListener("click", () => { sourceForm.parser = btn.dataset.parser; renderParserPicker(); });
+});
+
+function openSourceForm(source) {
+  editingSourceId = source ? source.id : null;
+  document.getElementById("source-form-title").textContent = source ? `Edit ${source.label}` : "Add a source";
+  document.getElementById("src-label").value = source ? source.label : "";
+  document.getElementById("src-url").value = source ? source.url : "";
+  document.getElementById("src-extraction-rules").value = (source && source.extraction_rules) || "";
+  sourceForm = {
+    kind: source ? source.kind : "venue",
+    tier: source ? source.preferred_tier : 1,
+    parser: (source && source.parser_id) || "chapel",
+  };
+  renderKindPicker();
+  renderTierPicker();
+  renderParserPicker();
+  banner(document.getElementById("source-form-banner"), "", "");
+  const card = document.getElementById("source-form-card");
+  card.style.display = "block";
+  card.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function closeSourceForm() {
+  document.getElementById("source-form-card").style.display = "none";
+  editingSourceId = null;
+}
+
+document.getElementById("add-source-btn").addEventListener("click", () => openSourceForm(null));
+document.getElementById("cancel-source-btn").addEventListener("click", closeSourceForm);
+
+document.getElementById("save-source-btn").addEventListener("click", async () => {
+  const bannerEl = document.getElementById("source-form-banner");
+  const btn = document.getElementById("save-source-btn");
+  const label = document.getElementById("src-label").value.trim();
+  const url = document.getElementById("src-url").value.trim();
+  const extractionRules = document.getElementById("src-extraction-rules").value.trim();
+  if (!label || !url) { banner(bannerEl, "Label and URL are required.", "err"); return; }
+
+  const payload = {
+    label, url,
+    kind: sourceForm.kind,
+    preferred_tier: sourceForm.tier,
+    parser_id: sourceForm.tier === 1 ? sourceForm.parser : null,
+    extraction_rules: extractionRules || null,
+  };
+
+  const wasEditing = editingSourceId;
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner"></span> Saving…`;
+  try {
+    if (wasEditing) {
+      await apiPatch(`/ops/sources/${wasEditing}`, payload);
+    } else {
+      await apiPost("/ops/sources", payload);
+    }
+    closeSourceForm();
+    await loadSources();
+    banner(document.getElementById("sources-banner"), wasEditing ? "Source updated." : "Source added.", "ok");
+  } catch (e) {
+    banner(bannerEl, e.message, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Save source";
+  }
+});
 
 document.getElementById("refresh-sources").addEventListener("click", loadSources);
 

@@ -254,6 +254,10 @@ class Repository:
     # ---- sources / source_runs (curation layer, Phase 1) -----------------
 
     def get_sources(self, city: str = "sf") -> list[dict]:
+        """Enabled sources only — this is what the research pipeline itself
+        loads (see source_registry.load_sources), and a disabled source
+        must never be fetched. Use get_all_sources for anything that needs
+        to see (or manage) every source, disabled ones included."""
         res = (
             self._client.table("sources")
             .select("*")
@@ -262,6 +266,43 @@ class Repository:
             .execute()
         )
         return res.data
+
+    def get_all_sources(self, city: str = "sf") -> list[dict]:
+        """Every source regardless of enabled — the admin UI's listing, so a
+        paused source stays visible (and re-enable-able) instead of
+        disappearing. Never used by the research pipeline itself."""
+        res = self._client.table("sources").select("*").eq("city", city).execute()
+        return res.data
+
+    def insert_source(
+        self,
+        label: str,
+        city: str,
+        url: str,
+        kind: str,
+        preferred_tier: int,
+        parser_id: str | None,
+        extraction_rules: str | None,
+        enabled: bool,
+    ) -> dict:
+        row = {
+            "label": label,
+            "city": city,
+            "url": url,
+            "kind": kind,
+            "preferred_tier": preferred_tier,
+            "parser_id": parser_id,
+            "extraction_rules": extraction_rules,
+            "enabled": enabled,
+        }
+        res = self._client.table("sources").insert(row).execute()
+        return res.data[0]
+
+    def update_source(self, source_id, **fields) -> dict | None:
+        """Partial update — only fields actually present are touched. Returns
+        the updated row, or None if source_id doesn't exist."""
+        res = self._client.table("sources").update(fields).eq("id", str(source_id)).execute()
+        return res.data[0] if res.data else None
 
     def insert_source_run(
         self,

@@ -131,17 +131,30 @@ def record_source_run(
 
 
 def get_source_health(repo, city: str = "sf") -> list[dict]:
-    """Backing data for GET /ops/sources: per source, label / tier-in-use
-    (from the latest run's methods) / status / status_reason / the last
-    RECENT_RUNS_WINDOW candidate counts (most-recent-first)."""
-    rows = repo.get_sources(city)
+    """Backing data for GET /ops/sources: per source (enabled or not — a
+    paused source must stay visible/manageable, not disappear), the health
+    view (label / tier-in-use from the latest run's actual methods / status
+    / recent candidate counts) plus every field the admin UI needs to edit
+    or re-enable it. `preferred_tier`/`parser_id`/`extraction_rules` are
+    what a source is *expected* to use — set at creation, never read by the
+    pipeline itself (see deterministic_search.run_deterministic_research_call,
+    which decides the real method fresh every run); `tier_in_use` is what
+    actually happened last time. They can disagree, and that's fine."""
+    rows = repo.get_all_sources(city)
     health = []
     for row in rows:
         runs = repo.get_recent_source_runs(row["id"], limit=RECENT_RUNS_WINDOW)
         tier_in_use = f"{runs[0]['fetch_method']}/{runs[0]['extract_method']}" if runs else None
         health.append(
             {
+                "id": row["id"],
                 "label": row["label"],
+                "url": row["url"],
+                "kind": row["kind"],
+                "preferred_tier": row["preferred_tier"],
+                "parser_id": row.get("parser_id"),
+                "extraction_rules": row.get("extraction_rules"),
+                "enabled": row["enabled"],
                 "tier_in_use": tier_in_use,
                 "status": row.get("status"),
                 "status_reason": row.get("status_reason"),
