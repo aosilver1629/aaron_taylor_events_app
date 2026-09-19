@@ -237,6 +237,15 @@ def test_post_profile_unknown_person_404(monkeypatch):
     assert resp.status_code == 404
 
 
+def test_admin_ui_serves_html():
+    with TestClient(main_mod.app) as client:
+        resp = client.get("/admin")
+
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+    assert "Run research preview" in resp.text
+
+
 def test_profile_editor_serves_html():
     with TestClient(main_mod.app) as client:
         resp = client.get("/profile-editor/aaron")

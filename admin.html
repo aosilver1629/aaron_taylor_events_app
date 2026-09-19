@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Admin — SF Activities</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    --paper: #f7f6f2;
+    --card: #ffffff;
+    --ink: #1c2027;
+    --ink-soft: #6a6f63;
+    --rule: #e4e1d6;
+    --accent: #2b3a67;
+    --accent-ink: #ffffff;
+    --danger: #8a2f22;
+    --danger-bg: #f4dcd6;
+    --ok: #235a4d;
+    --ok-bg: #dfeae6;
+    --warn: #7a5217;
+    --warn-bg: #f3e6d2;
+    --silent-bg: #e6e4dc;
+    --silent-fg: #5c5f57;
+    --shadow: rgba(28, 32, 39, 0.08);
+    --nav-h: 4.25rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #14161a;
+      --card: #1c2027;
+      --ink: #e9e7dd;
+      --ink-soft: #9aa192;
+      --rule: #30343a;
+      --accent: #8fa1de;
+      --accent-ink: #0d0f13;
+      --danger: #e79a89;
+      --danger-bg: #3a201c;
+      --ok: #7fcdb8;
+      --ok-bg: #1c3430;
+      --warn: #e2b876;
+      --warn-bg: #3a2f1c;
+      --silent-bg: #2a2d33;
+      --silent-fg: #a4ac9f;
+      --shadow: rgba(0, 0, 0, 0.4);
+    }
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { color-scheme: light dark; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Public Sans', system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .shell { max-width: 30rem; margin: 0 auto; }
+
+  header.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--paper);
+    padding: 1rem 1.1rem 0.85rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .brand {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin: 0 0 0.15rem;
+  }
+
+  h1.page-title {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 600;
+    font-size: 1.5rem;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  main { padding: 1.1rem 1.1rem 2.5rem; min-height: 60vh; }
+  .panel { display: none; }
+  .panel.active { display: block; animation: fade 0.15s ease-out; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    padding: 1.1rem 1.1rem 1.2rem;
+    margin: 0 0 1rem;
+    box-shadow: 0 1px 3px var(--shadow);
+  }
+
+  .card h2 {
+    font-size: 1.02rem;
+    margin: 0 0 0.35rem;
+    font-weight: 700;
+  }
+
+  .card .desc {
+    color: var(--ink-soft);
+    font-size: 0.88rem;
+    margin: 0 0 0.9rem;
+    line-height: 1.5;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+    border: none;
+    font: inherit;
+    font-weight: 700;
+    font-size: 0.96rem;
+    cursor: pointer;
+    background: var(--ink);
+    color: var(--paper);
+    transition: opacity 0.12s;
+  }
+  .btn:active { opacity: 0.75; }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+  .btn.secondary {
+    background: transparent;
+    color: var(--ink);
+    border: 1.5px solid var(--rule);
+    font-weight: 600;
+  }
+  .btn.small { width: auto; padding: 0.5rem 0.9rem; font-size: 0.85rem; border-radius: 10px; }
+
+  .spinner {
+    width: 0.95rem; height: 0.95rem;
+    border: 2px solid rgba(255,255,255,0.35);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .banner {
+    border-radius: 12px;
+    padding: 0.75rem 0.9rem;
+    font-size: 0.88rem;
+    margin: 0 0 1rem;
+    line-height: 1.45;
+  }
+  .banner.ok { background: var(--ok-bg); color: var(--ok); }
+  .banner.err { background: var(--danger-bg); color: var(--danger); }
+  .banner.warn { background: var(--warn-bg); color: var(--warn); }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+    margin: 0.9rem 0 0;
+  }
+  .stat {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 0.55rem 0.5rem;
+    text-align: center;
+  }
+  .stat .n { font-family: 'JetBrains Mono', monospace; font-size: 1.05rem; font-weight: 600; display: block; }
+  .stat .l { font-size: 0.68rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.03em; }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+  }
+  .pill.healthy { background: var(--ok-bg); color: var(--ok); }
+  .pill.degraded { background: var(--warn-bg); color: var(--warn); }
+  .pill.blocked { background: var(--danger-bg); color: var(--danger); }
+  .pill.silent { background: var(--silent-bg); color: var(--silent-fg); }
+  .pill.preview { background: var(--warn-bg); color: var(--warn); }
+
+  .event-card {
+    background: var(--card);
+    border: 1.5px solid var(--rule);
+    border-radius: 14px;
+    padding: 0.95rem 1rem;
+    margin: 0 0 0.7rem;
+    cursor: pointer;
+    transition: border-color 0.12s, background 0.12s;
+    position: relative;
+  }
+  .event-card.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--card)); }
+  .event-card .row-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; }
+  .event-card .title { font-weight: 700; font-size: 0.98rem; line-height: 1.3; }
+  .event-card .check {
+    flex: 0 0 auto; width: 1.3rem; height: 1.3rem; border-radius: 50%;
+    border: 1.5px solid var(--rule); display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; color: transparent; background: var(--paper);
+  }
+  .event-card.selected .check { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .event-card .meta { color: var(--ink-soft); font-size: 0.82rem; margin-top: 0.3rem; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem; }
+  .chip {
+    font-size: 0.72rem; padding: 0.2rem 0.55rem; border-radius: 999px;
+    background: var(--paper); border: 1px solid var(--rule); color: var(--ink-soft);
+  }
+  .match-note { font-size: 0.76rem; color: var(--accent); margin-top: 0.4rem; font-style: italic; }
+  .badge-sent { position: absolute; top: -0.5rem; right: 0.7rem; font-size: 0.66rem; font-weight: 700;
+    background: var(--ok); color: var(--card); padding: 0.15rem 0.5rem; border-radius: 999px; }
+  .badge-dup { position: absolute; top: -0.5rem; right: 0.7rem; font-size: 0.66rem; font-weight: 700;
+    background: var(--ink-soft); color: var(--card); padding: 0.15rem 0.5rem; border-radius: 999px; }
+
+  .empty { text-align: center; padding: 2.5rem 1rem; color: var(--ink-soft); font-size: 0.9rem; }
+
+  .sticky-bar {
+    position: fixed;
+    left: 0; right: 0;
+    bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+    display: none;
+    justify-content: center;
+    padding: 0 1.1rem 0.7rem;
+    z-index: 15;
+  }
+  .sticky-bar.show { display: flex; }
+  .sticky-bar .inner {
+    max-width: 30rem; width: 100%;
+    background: var(--ink); color: var(--paper);
+    border-radius: 14px; padding: 0.8rem 1rem;
+    display: flex; align-items: center; justify-content: space-between; gap: 0.8rem;
+    box-shadow: 0 6px 20px var(--shadow);
+  }
+  .sticky-bar .count { font-size: 0.85rem; opacity: 0.85; }
+  .sticky-bar button {
+    background: var(--paper); color: var(--ink); border: none; border-radius: 10px;
+    padding: 0.6rem 1.1rem; font-weight: 700; font-size: 0.9rem; cursor: pointer;
+  }
+
+  nav.tabbar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--card);
+    border-top: 1px solid var(--rule);
+    display: flex;
+    z-index: 20;
+  }
+  .tabbar .max { max-width: 30rem; margin: 0 auto; display: flex; width: 100%; }
+  .tab {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.2rem;
+    background: none; border: none; color: var(--ink-soft); font: inherit; cursor: pointer;
+    padding: 0.4rem 0;
+  }
+  .tab svg { width: 1.35rem; height: 1.35rem; stroke: currentColor; fill: none; stroke-width: 1.8; }
+  .tab span { font-size: 0.68rem; font-weight: 600; }
+  .tab.active { color: var(--accent); }
+
+  /* segmented control */
+  .segmented { display: flex; background: var(--paper); border: 1px solid var(--rule); border-radius: 12px; padding: 0.2rem; margin-bottom: 1rem; }
+  .segmented button {
+    flex: 1; border: none; background: none; padding: 0.55rem 0; border-radius: 9px;
+    font: inherit; font-weight: 700; font-size: 0.88rem; color: var(--ink-soft); cursor: pointer;
+  }
+  .segmented button.active { background: var(--ink); color: var(--paper); }
+
+  /* taxonomy chip groups (excludes = danger tint, includes = ok tint) */
+  .tax-group { margin: 0 0 0.85rem; }
+  .tax-group:last-child { margin-bottom: 0; }
+  .tax-group h3 {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--ink-soft); margin: 0 0 0.4rem; font-weight: 700;
+  }
+  .tax-chip {
+    display: inline-flex; align-items: center; padding: 0.35rem 0.7rem; margin: 0 0.35rem 0.35rem 0;
+    border-radius: 999px; border: 1.5px solid var(--rule); font-size: 0.83rem; cursor: pointer;
+    background: var(--paper); user-select: none;
+  }
+  .tax-chip.on.exclude { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+  .tax-chip.on.include { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+
+  .tag-input-row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; padding: 0.5rem; border: 1.5px solid var(--rule); border-radius: 12px; background: var(--paper); }
+  .tag-pill { display: inline-flex; align-items: center; gap: 0.35rem; background: var(--card); border: 1px solid var(--rule); border-radius: 999px; padding: 0.25rem 0.4rem 0.25rem 0.7rem; font-size: 0.85rem; }
+  .tag-pill button { border: none; background: none; color: var(--ink-soft); cursor: pointer; font-size: 0.9rem; line-height: 1; padding: 0.1rem; }
+  .tag-input-row input { border: none; background: none; outline: none; font: inherit; flex: 1; min-width: 6rem; color: var(--ink); padding: 0.3rem; }
+
+  textarea, .exemplar-input {
+    width: 100%; font: inherit; padding: 0.7rem 0.8rem; border-radius: 12px;
+    border: 1.5px solid var(--rule); background: var(--paper); color: var(--ink); resize: vertical;
+  }
+  textarea:focus, .exemplar-input:focus, .tag-input-row:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .exemplar-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center; }
+  .exemplar-row .exemplar-input { flex: 1; }
+  .exemplar-row .count { font-size: 0.72rem; color: var(--ink-soft); flex: 0 0 auto; width: 2.6rem; text-align: right; }
+  .icon-btn { border: none; background: var(--paper); border: 1.5px solid var(--rule); color: var(--ink-soft); border-radius: 10px; width: 2.3rem; height: 2.3rem; flex: 0 0 auto; cursor: pointer; }
+  .add-row { border: 1.5px dashed var(--rule); background: transparent; color: var(--ink-soft); border-radius: 12px; padding: 0.55rem; width: 100%; font: inherit; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
+
+  .field-label { font-size: 0.78rem; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.03em; margin: 0 0 0.5rem; }
+
+  .source-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 0.75rem 0; border-bottom: 1px solid var(--rule); gap: 0.7rem; }
+  .source-row:last-child { border-bottom: none; }
+  .source-row .name { font-weight: 700; font-size: 0.92rem; }
+  .source-row .tier { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--ink-soft); margin-top: 0.15rem; }
+  .sparkline { display: flex; align-items: flex-end; gap: 0.18rem; height: 1.8rem; margin-top: 0.5rem; }
+  .sparkline i { display: block; width: 0.34rem; background: var(--rule); border-radius: 2px 2px 0 0; min-height: 3px; }
+  .sparkline i.has { background: var(--accent); opacity: 0.85; }
+
+  .link-out { display: inline-block; margin-top: 0.5rem; font-size: 0.85rem; color: var(--accent); text-decoration: none; font-weight: 600; }
+
+  .refresh-btn { position: absolute; top: 1rem; right: 1.1rem; background: none; border: none; color: var(--ink-soft); cursor: pointer; padding: 0.3rem; }
+  header.topbar { position: sticky; }
+  .topbar-inner { position: relative; }
+
+  @media (min-width: 30rem) {
+    body { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="shell topbar-inner">
+    <p class="brand">SF Activities &middot; internal</p>
+    <h1 class="page-title" id="page-title">Research</h1>
+  </div>
+</header>
+
+<main class="shell">
+
+  <!-- RESEARCH TAB -->
+  <section class="panel" id="panel-research">
+    <div class="card">
+      <h2>Preview a research run</h2>
+      <p class="desc">Runs the real pipeline — Ticketmaster, Bandsintown, source scraping, Claude tagging and matching — but writes nothing to the database. Nothing is sent to Aaron or Tay from this step.</p>
+      <button class="btn" id="run-research-btn">Run research preview</button>
+      <div id="research-stats"></div>
+    </div>
+
+    <div id="research-banner"></div>
+    <div id="research-results"></div>
+  </section>
+
+  <!-- PROFILES TAB -->
+  <section class="panel" id="panel-profiles">
+    <div class="segmented" id="person-segmented">
+      <button data-person="aaron" class="active">Aaron</button>
+      <button data-person="tay">Tay</button>
+    </div>
+
+    <div id="profile-banner"></div>
+
+    <div class="card">
+      <h2>Describe preferences</h2>
+      <p class="desc">Free text, parsed into the sections below for you to review — nothing saves until you tap Save.</p>
+      <textarea id="parse-input" rows="3" placeholder="e.g. No metal or standup. I love Watchhouse and outdoor food markets with live music."></textarea>
+      <div style="height:0.6rem"></div>
+      <button class="btn secondary" id="parse-btn">Parse with AI</button>
+    </div>
+
+    <div class="card">
+      <h2>Hard excludes</h2>
+      <p class="desc">Never makes the ballot, no matter what else looks good.</p>
+      <div id="excludes-groups"></div>
+    </div>
+
+    <div class="card">
+      <h2>Include tags</h2>
+      <p class="desc">A mild boost when ranking candidates.</p>
+      <div id="includes-groups"></div>
+    </div>
+
+    <div class="card">
+      <h2>People, artists, venues</h2>
+      <div class="tag-input-row" id="entity-row">
+        <input type="text" id="entity-input" placeholder="Add a name, press Enter">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Exemplars</h2>
+      <p class="desc">Up to 5 events you loved — used to break ties when there's more than fits on one ballot.</p>
+      <div id="exemplar-rows"></div>
+      <button class="add-row" id="add-exemplar">+ add an exemplar</button>
+    </div>
+
+    <button class="btn" id="save-profile-btn">Save profile</button>
+    <div style="height:0.6rem"></div>
+    <a class="link-out" id="full-editor-link" href="/profile-editor/aaron" target="_blank" rel="noopener">Open full-page editor &#8599;</a>
+  </section>
+
+  <!-- SOURCES TAB -->
+  <section class="panel" id="panel-sources">
+    <div class="card" style="position:relative;">
+      <button class="refresh-btn" id="refresh-sources" aria-label="Refresh">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v5h-5"/></svg>
+      </button>
+      <h2>Source health</h2>
+      <p class="desc">Read-only. Label, which fetch/extract tier the latest run actually used, health status, and the last 8 runs' candidate counts.</p>
+      <div id="sources-list"></div>
+    </div>
+
+    <div class="banner warn">
+      <strong>Adding, editing, enabling or disabling a source isn't wired up yet.</strong> This view only reflects sources already seeded in the database. Ask your engineer — the case for the two small routes this needs (and why a delete route isn't recommended) is in the session's chat log.
+    </div>
+  </section>
+
+</main>
+
+<div class="sticky-bar" id="approve-bar">
+  <div class="inner">
+    <span class="count" id="approve-count">0 selected</span>
+    <button id="approve-btn">Approve &amp; send ballot</button>
+  </div>
+</div>
+
+<nav class="tabbar">
+  <div class="max">
+    <button class="tab active" data-tab="research">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <span>Research</span>
+    </button>
+    <button class="tab" data-tab="profiles">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>
+      <span>Profiles</span>
+    </button>
+    <button class="tab" data-tab="sources">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      <span>Sources</span>
+    </button>
+  </div>
+</nav>
+
+<script>
+const TAXONOMY = {
+  music: ["folk", "americana", "indie", "rock", "punk", "electronic", "hiphop", "jazz", "classical", "other"],
+  comedy: ["standup", "improv", "other"],
+  talks: ["author", "political", "science", "other"],
+  food: ["popup", "festival", "market"],
+  fairs: ["street-fair", "festival"],
+  art: ["gallery", "film", "theater"],
+  outdoor: ["run", "market", "other"],
+};
+
+const TAB_TITLES = { research: "Research", profiles: "Taste profiles", sources: "Sources" };
+
+// ---- tiny fetch helpers -----------------------------------------------
+
+async function apiGet(path) {
+  const res = await fetch(path);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `request failed (${res.status})`);
+  return body;
+}
+
+async function apiPost(path, payload) {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `request failed (${res.status})`);
+  return body;
+}
+
+function banner(el, text, cls) {
+  el.innerHTML = "";
+  if (!text) return;
+  const div = document.createElement("div");
+  div.className = `banner ${cls}`;
+  div.textContent = text;
+  el.appendChild(div);
+}
+
+function fmtWhen(iso) {
+  if (!iso) return "date TBD";
+  const d = new Date(iso);
+  if (isNaN(d)) return "date TBD";
+  const day = d.toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric", timeZone: "America/Los_Angeles" });
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: d.getMinutes() === 0 ? undefined : "2-digit", timeZone: "America/Los_Angeles" });
+  return `${day} · ${time}`;
+}
+
+// ---- tabs ----------------------------------------------------------------
+
+function setTab(tab) {
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  document.getElementById(`panel-${tab}`).classList.add("active");
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  document.getElementById("page-title").textContent = TAB_TITLES[tab];
+  document.getElementById("approve-bar").classList.toggle("show", tab === "research" && selected.size > 0);
+  location.hash = tab;
+  if (tab === "sources" && !sourcesLoaded) loadSources();
+  if (tab === "profiles" && !profileLoaded[activePerson]) loadProfile(activePerson);
+}
+
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.addEventListener("click", () => setTab(btn.dataset.tab));
+});
+
+// ---- RESEARCH tab ----------------------------------------------------------
+
+let previewEvents = [];
+let selected = new Set();
+
+function renderResearchStats(last) {
+  const el = document.getElementById("research-stats");
+  if (!last || last.status === "no_run_yet_this_process") { el.innerHTML = ""; return; }
+  el.innerHTML = "";
+  const pill = document.createElement("div");
+  pill.style.marginTop = "0.7rem";
+  pill.innerHTML = `<span class="pill preview">preview · nothing saved</span>`;
+  el.appendChild(pill);
+  const grid = document.createElement("div");
+  grid.className = "stat-grid";
+  const stats = [
+    ["Ticketmaster", last.ticketmaster_found],
+    ["Bandsintown", last.bandsintown_found],
+    ["Validated", last.validated],
+    ["Rejected", last.rejected],
+    ["Matched", last.inserted],
+    ["Tagged", last.tagged],
+  ];
+  for (const [label, n] of stats) {
+    const s = document.createElement("div");
+    s.className = "stat";
+    s.innerHTML = `<span class="n">${n ?? "–"}</span><span class="l">${label}</span>`;
+    grid.appendChild(s);
+  }
+  el.appendChild(grid);
+}
+
+function renderEventCards() {
+  const el = document.getElementById("research-results");
+  el.innerHTML = "";
+  if (!previewEvents.length) return;
+  previewEvents.forEach((ev, i) => {
+    const card = document.createElement("div");
+    card.className = "event-card" + (selected.has(i) ? " selected" : "");
+    if (ev._outcome === "sent") {
+      card.innerHTML = `<span class="badge-sent">sent</span>`;
+    } else if (ev._outcome === "duplicate") {
+      card.innerHTML = `<span class="badge-dup">already exists</span>`;
+    }
+    const tags = (ev.tags || []).map(t => `<span class="chip">${t}</span>`).join("");
+    const priceChip = ev.price_range ? `<span class="chip">${ev.price_range}</span>` : "";
+    card.innerHTML += `
+      <div class="row-top">
+        <div>
+          <div class="title">${ev.title}</div>
+          <div class="meta">${ev.venue || "venue TBD"} · ${fmtWhen(ev.start_at)}</div>
+        </div>
+        <div class="check">&#10003;</div>
+      </div>
+      <div class="chip-row">${ev.category ? `<span class="chip">${ev.category}</span>` : ""}${priceChip}${tags}</div>
+      ${ev.match_reasons && ev.match_reasons.length ? `<div class="match-note">matched: ${ev.match_reasons.join(", ")}</div>` : ""}
+    `;
+    if (!ev._outcome) {
+      card.addEventListener("click", () => {
+        if (selected.has(i)) selected.delete(i); else selected.add(i);
+        renderEventCards();
+        updateApproveBar();
+      });
+    } else {
+      card.style.cursor = "default";
+      card.style.opacity = "0.65";
+    }
+    el.appendChild(card);
+  });
+}
+
+function updateApproveBar() {
+  const bar = document.getElementById("approve-bar");
+  document.getElementById("approve-count").textContent = `${selected.size} selected`;
+  bar.classList.toggle("show", selected.size > 0);
+}
+
+document.getElementById("run-research-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("run-research-btn");
+  const bannerEl = document.getElementById("research-banner");
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner"></span> Researching… (real API calls, this can take a bit)`;
+  banner(bannerEl, "", "");
+  selected = new Set();
+  updateApproveBar();
+  try {
+    const last = await apiPost("/ops/research/run", {});
+    previewEvents = last.inserted_events || [];
+    renderResearchStats(last);
+    renderEventCards();
+    if (!previewEvents.length) {
+      banner(bannerEl, "No candidates survived validation/matching this run.", "warn");
+    }
+  } catch (e) {
+    banner(bannerEl, e.message, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Run research preview";
+  }
+});
+
+document.getElementById("approve-btn").addEventListener("click", async () => {
+  const bannerEl = document.getElementById("research-banner");
+  const btn = document.getElementById("approve-btn");
+  const chosen = [...selected].map(i => previewEvents[i]);
+  btn.disabled = true;
+  btn.textContent = "Sending…";
+  try {
+    const result = await apiPost("/ops/events/approve", { events: chosen });
+    const sentTitles = new Set(result.inserted_titles || []);
+    const dupTitles = new Set(result.skipped_duplicates || []);
+    for (const i of selected) {
+      const t = previewEvents[i].title;
+      previewEvents[i]._outcome = sentTitles.has(t) ? "sent" : (dupTitles.has(t) ? "duplicate" : "sent");
+    }
+    selected = new Set();
+    renderEventCards();
+    updateApproveBar();
+    const msg = result.ballot_sent
+      ? `Minted ${result.inserted} event${result.inserted === 1 ? "" : "s"} and sent the ballot · ${result.ballot_people_notified} people notified.`
+      : `Nothing sent — ${result.skipped_duplicates.length} already existed.`;
+    banner(bannerEl, msg, result.ballot_sent ? "ok" : "warn");
+  } catch (e) {
+    banner(bannerEl, e.message, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Approve & send ballot";
+  }
+});
+
+(async function initResearchLastRun() {
+  try {
+    const last = await apiGet("/ops/research/last-run");
+    if (last && last.status !== "no_run_yet_this_process" && last.persisted === false) {
+      previewEvents = []; // last-run doesn't carry full event objects back across a page load
+      renderResearchStats(last);
+    }
+  } catch (e) { /* fine — just skip the stats card */ }
+})();
+
+// ---- PROFILES tab -----------------------------------------------------------
+
+let activePerson = "aaron";
+let profileLoaded = { aaron: false, tay: false };
+let profileState = {
+  aaron: { hard_excludes: [], include_tags: [], include_entities: [], exemplars: [] },
+  tay: { hard_excludes: [], include_tags: [], include_entities: [], exemplars: [] },
+};
+
+document.querySelectorAll("#person-segmented button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    activePerson = btn.dataset.person;
+    document.querySelectorAll("#person-segmented button").forEach(b => b.classList.toggle("active", b === btn));
+    document.getElementById("full-editor-link").href = `/profile-editor/${activePerson}`;
+    if (!profileLoaded[activePerson]) loadProfile(activePerson); else renderProfile();
+  });
+});
+
+async function loadProfile(person) {
+  const bannerEl = document.getElementById("profile-banner");
+  try {
+    const data = await apiGet(`/profile/${person}`);
+    profileState[person] = {
+      hard_excludes: data.hard_excludes || [],
+      include_tags: data.include_tags || [],
+      include_entities: data.include_entities || [],
+      exemplars: data.exemplars || [],
+    };
+    profileLoaded[person] = true;
+    renderProfile();
+  } catch (e) {
+    banner(bannerEl, e.message, "err");
+  }
+}
+
+function state() { return profileState[activePerson]; }
+
+function renderTaxGroups(containerId, cls, field) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = "";
+  for (const [top, subs] of Object.entries(TAXONOMY)) {
+    const group = document.createElement("div");
+    group.className = "tax-group";
+    const h3 = document.createElement("h3");
+    h3.textContent = top;
+    group.appendChild(h3);
+    for (const sub of subs) {
+      const tag = `${top}/${sub}`;
+      const on = state()[field].includes(tag);
+      const chip = document.createElement("span");
+      chip.className = `tax-chip ${cls}` + (on ? " on" : "");
+      chip.textContent = sub;
+      chip.addEventListener("click", () => {
+        const set = new Set(state()[field]);
+        if (set.has(tag)) set.delete(tag); else set.add(tag);
+        state()[field] = [...set];
+        renderTaxGroups(containerId, cls, field);
+      });
+      group.appendChild(chip);
+    }
+    container.appendChild(group);
+  }
+}
+
+function renderEntities() {
+  const row = document.getElementById("entity-row");
+  row.querySelectorAll(".tag-pill").forEach(p => p.remove());
+  const input = document.getElementById("entity-input");
+  state().include_entities.forEach((name, i) => {
+    const pill = document.createElement("span");
+    pill.className = "tag-pill";
+    pill.innerHTML = `${name} <button aria-label="remove">&times;</button>`;
+    pill.querySelector("button").addEventListener("click", () => {
+      state().include_entities.splice(i, 1);
+      renderEntities();
+    });
+    row.insertBefore(pill, input);
+  });
+}
+
+document.getElementById("entity-input").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const val = e.target.value.trim();
+  if (!val) return;
+  state().include_entities.push(val);
+  e.target.value = "";
+  renderEntities();
+});
+
+function renderExemplars() {
+  const container = document.getElementById("exemplar-rows");
+  container.innerHTML = "";
+  state().exemplars.forEach((val, i) => {
+    const row = document.createElement("div");
+    row.className = "exemplar-row";
+    const input = document.createElement("input");
+    input.className = "exemplar-input";
+    input.value = val;
+    input.maxLength = 200;
+    input.placeholder = "Describe an event you loved";
+    const count = document.createElement("span");
+    count.className = "count";
+    count.textContent = `${val.length}/200`;
+    input.addEventListener("input", () => {
+      state().exemplars[i] = input.value;
+      count.textContent = `${input.value.length}/200`;
+    });
+    const remove = document.createElement("button");
+    remove.className = "icon-btn";
+    remove.innerHTML = "&times;";
+    remove.addEventListener("click", () => { state().exemplars.splice(i, 1); renderExemplars(); });
+    row.appendChild(input);
+    row.appendChild(count);
+    row.appendChild(remove);
+    container.appendChild(row);
+  });
+}
+
+document.getElementById("add-exemplar").addEventListener("click", () => {
+  if (state().exemplars.length >= 5) return;
+  state().exemplars.push("");
+  renderExemplars();
+});
+
+function renderProfile() {
+  renderTaxGroups("excludes-groups", "exclude", "hard_excludes");
+  renderTaxGroups("includes-groups", "include", "include_tags");
+  renderEntities();
+  renderExemplars();
+}
+
+document.getElementById("parse-btn").addEventListener("click", async () => {
+  const input = document.getElementById("parse-input");
+  const bannerEl = document.getElementById("profile-banner");
+  const text = input.value.trim();
+  if (!text) return;
+  const btn = document.getElementById("parse-btn");
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner"></span> Reading…`;
+  try {
+    const draft = await apiPost(`/profile/${activePerson}/parse`, { text });
+    let added = 0;
+    for (const field of ["hard_excludes", "include_tags"]) {
+      const set = new Set(state()[field]);
+      for (const tag of draft[field] || []) if (!set.has(tag)) { set.add(tag); added++; }
+      state()[field] = [...set];
+    }
+    const existing = new Set(state().include_entities.map(e => e.toLowerCase()));
+    for (const name of draft.include_entities || []) {
+      if (!existing.has(name.toLowerCase())) { state().include_entities.push(name); existing.add(name.toLowerCase()); added++; }
+    }
+    for (const ex of draft.exemplars || []) {
+      if (state().exemplars.length >= 5) break;
+      if (!state().exemplars.includes(ex)) { state().exemplars.push(ex); added++; }
+    }
+    renderProfile();
+    banner(bannerEl, added ? `Added ${added} item${added === 1 ? "" : "s"} below — review, then Save.` : "Nothing new found — try being more specific.", "ok");
+    input.value = "";
+  } catch (e) {
+    banner(bannerEl, e.message, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Parse with AI";
+  }
+});
+
+async function saveProfile() {
+  const bannerEl = document.getElementById("profile-banner");
+  try {
+    const payload = {
+      hard_excludes: state().hard_excludes,
+      include_tags: state().include_tags,
+      include_entities: state().include_entities.map(s => s.trim()).filter(Boolean),
+      exemplars: state().exemplars.map(s => s.trim()).filter(Boolean),
+    };
+    const saved = await apiPost(`/profile/${activePerson}`, payload);
+    profileState[activePerson] = {
+      hard_excludes: saved.hard_excludes || [],
+      include_tags: saved.include_tags || [],
+      include_entities: saved.include_entities || [],
+      exemplars: saved.exemplars || [],
+    };
+    renderProfile();
+    banner(bannerEl, "Saved.", "ok");
+  } catch (e) {
+    banner(bannerEl, e.message, "err");
+  }
+}
+
+// ---- SOURCES tab ------------------------------------------------------------
+
+let sourcesLoaded = false;
+
+function statusPillClass(status) {
+  return ["healthy", "degraded", "blocked", "silent"].includes(status) ? status : "silent";
+}
+
+async function loadSources() {
+  const el = document.getElementById("sources-list");
+  el.innerHTML = `<div class="empty">Loading…</div>`;
+  try {
+    const data = await apiGet("/ops/sources");
+    const sources = data.sources || [];
+    sourcesLoaded = true;
+    if (!sources.length) { el.innerHTML = `<div class="empty">No enabled sources found.</div>`; return; }
+    el.innerHTML = "";
+    const max = Math.max(1, ...sources.flatMap(s => s.recent_candidates || [0]));
+    sources.forEach(s => {
+      const row = document.createElement("div");
+      row.className = "source-row";
+      const bars = (s.recent_candidates || []).slice().reverse()
+        .map(n => `<i class="${n > 0 ? "has" : ""}" style="height:${n > 0 ? Math.max(20, (n / max) * 100) : 6}%"></i>`).join("");
+      row.innerHTML = `
+        <div>
+          <div class="name">${s.label}</div>
+          <div class="tier">${s.tier_in_use || "no runs yet"}</div>
+          <div class="sparkline">${bars}</div>
+        </div>
+        <span class="pill ${statusPillClass(s.status)}">${s.status || "unknown"}</span>
+      `;
+      el.appendChild(row);
+    });
+  } catch (e) {
+    el.innerHTML = `<div class="empty">Couldn't load source health: ${e.message}</div>`;
+  }
+}
+
+document.getElementById("refresh-sources").addEventListener("click", loadSources);
+
+// ---- boot ------------------------------------------------------------------
+
+document.getElementById("save-profile-btn").addEventListener("click", saveProfile);
+
+const startTab = (["research", "profiles", "sources"].includes(location.hash.slice(1))) ? location.hash.slice(1) : "research";
+setTab(startTab);
+</script>
+</body>
+</html>

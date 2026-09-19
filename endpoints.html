@@ -396,6 +396,7 @@
 
   <nav class="jump" aria-label="Jump to route">
     <a href="#health">health</a>
+    <a href="#admin">admin</a>
     <a href="#ops-sources">ops/sources</a>
     <a href="#ops-research-run">ops/research/run</a>
     <a href="#ops-research-last-run">ops/research/last-run</a>
@@ -429,8 +430,24 @@
     </div>
   </div>
 
-  <div class="route" id="ops-sources">
+  <div class="route" id="admin">
     <div class="route-index">02</div>
+    <div>
+      <div class="route-head">
+        <span class="method">GET</span>
+        <span class="path">/admin</span>
+        <span class="sev read">no mutation</span>
+      </div>
+      <p class="purpose">Serves <code>admin.html</code> &mdash; a mobile-first admin app covering research preview + approve, taste-profile editing, and read-only source health. All backed by the JSON routes in this ledger, called client-side; this route itself does nothing but return the file. On this same origin (rather than hosted separately) specifically so those <code>fetch</code> calls aren't blocked by CORS &mdash; this app has no CORS middleware.</p>
+      <h3 class="label">Required input</h3>
+      <p class="none-note">None.</p>
+      <h3 class="label">Database</h3>
+      <div class="mutation-block read">None &mdash; reads <code>admin.html</code> off disk, same pattern as <code>/endpoints</code> and <code>/profile-editor/{person}</code>.</div>
+    </div>
+  </div>
+
+  <div class="route" id="ops-sources">
+    <div class="route-index">03</div>
     <div>
       <div class="route-head">
         <span class="method">GET</span>
@@ -448,7 +465,7 @@
   </div>
 
   <div class="route" id="ops-research-run">
-    <div class="route-index">03</div>
+    <div class="route-index">04</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -467,7 +484,7 @@
   </div>
 
   <div class="route" id="ops-research-last-run">
-    <div class="route-index">04</div>
+    <div class="route-index">05</div>
     <div>
       <div class="route-head">
         <span class="method">GET</span>
@@ -486,7 +503,7 @@
   </div>
 
   <div class="route" id="ops-events-approve">
-    <div class="route-index">05</div>
+    <div class="route-index">06</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -507,7 +524,7 @@
   </div>
 
   <div class="route" id="profile-get">
-    <div class="route-index">06</div>
+    <div class="route-index">07</div>
     <div>
       <div class="route-head">
         <span class="method">GET</span>
@@ -527,7 +544,7 @@
   </div>
 
   <div class="route" id="profile-post">
-    <div class="route-index">07</div>
+    <div class="route-index">08</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -551,7 +568,7 @@
   </div>
 
   <div class="route" id="profile-parse">
-    <div class="route-index">08</div>
+    <div class="route-index">09</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -572,7 +589,7 @@
   </div>
 
   <div class="route" id="profile-editor">
-    <div class="route-index">09</div>
+    <div class="route-index">10</div>
     <div>
       <div class="route-head">
         <span class="method">GET</span>
@@ -590,7 +607,7 @@
   </div>
 
   <div class="route" id="sms">
-    <div class="route-index">10</div>
+    <div class="route-index">11</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -620,7 +637,7 @@
     </div>
   </div>
 
-  <footer>app/main.py &middot; 10 routes &middot; kept current by hand</footer>
+  <footer>app/main.py &middot; 11 routes &middot; kept current by hand</footer>
 </div>
 </body>
 </html>

@@ -70,6 +70,21 @@ def endpoints_doc() -> HTMLResponse:
     return HTMLResponse(content=html_path.read_text())
 
 
+@app.get("/admin", response_class=HTMLResponse)
+def admin_ui() -> HTMLResponse:
+    """Serves admin.html — a mobile-first admin app (research preview +
+    approve, taste-profile editing, source health) that calls the JSON
+    routes below entirely client-side. Not an "ops" route itself: same
+    no-DB-access, read-the-file-off-disk pattern as /endpoints and
+    /profile-editor/{person}. Exists on this same origin (rather than as
+    a separately-hosted page) because the browser fetches it makes to
+    /ops/research/run, /ops/events/approve, and /profile/{person} would
+    otherwise be blocked by CORS — this app has no CORS middleware, by
+    design, since every real client is same-origin."""
+    html_path = Path(__file__).resolve().parent.parent / "admin.html"
+    return HTMLResponse(content=html_path.read_text())
+
+
 @app.get("/ops/sources")
 def ops_sources(city: str = "sf") -> dict:
     """Curation layer, Phase 1 — no UI, this JSON is the testable surface.
