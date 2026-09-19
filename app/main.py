@@ -16,6 +16,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.config import get_settings
 from app.db import Repository
+from app.jobs.ballot_job import run_ballot_send_job
+from app.jobs.research_job import get_last_run, mark_ballot_sent, run_research_job
 from app.logging_config import configure_logging
 from app.models import PEOPLE
 from app.research.profile_parser import parse_preference_text
@@ -63,6 +65,42 @@ def ops_sources(city: str = "sf") -> dict:
     used, health status + reason, and the last 8 runs' candidate counts."""
     repo = Repository()
     return {"sources": get_source_health(repo, city=city)}
+
+
+@app.post("/ops/research/run")
+def ops_research_run(send_ballot: bool = False) -> dict:
+    """Manual trigger for Job 1 (research). Runs the exact same
+    run_research_job the scheduler calls every other morning, inserting
+    whatever it finds into the real `events` table — this is not a
+    sandboxed dry run.
+
+    send_ballot defaults to false: research runs and inserts events, but
+    the real SMS ballot to Aaron and Tay is NOT sent unless the caller
+    explicitly opts in with ?send_ballot=true. This lets research be
+    triggered/inspected on demand without texting anyone by accident.
+    """
+    repo = Repository()
+    settings = get_settings()
+    research_result = run_research_job(repo, settings, triggered_by="manual")
+
+    if send_ballot:
+        events = research_result.get("inserted_events", [])
+        if events:
+            ballot_result = run_ballot_send_job(repo, events, settings)
+            mark_ballot_sent(True, ballot_result.get("people", 0))
+        else:
+            mark_ballot_sent(False, 0)
+
+    return get_last_run() or {"status": "no_run_yet_this_process"}
+
+
+@app.get("/ops/research/last-run")
+def ops_research_last_run() -> dict:
+    """Status + result of the most recent research run in this process
+    (cron-triggered or manual via POST /ops/research/run). In-memory only
+    — resets on redeploy/restart; see run_research_job's module docstring
+    for why that tradeoff is fine here."""
+    return get_last_run() or {"status": "no_run_yet_this_process"}
 
 
 MAX_EXEMPLARS = 5

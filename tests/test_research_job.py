@@ -24,6 +24,16 @@ def _no_op_enrichment(monkeypatch):
     monkeypatch.setattr(research_job_mod, "enrich_events", lambda events, settings: None)
 
 
+@pytest.fixture(autouse=True)
+def _reset_last_run():
+    """_last_run is module-level global state (backs GET /ops/research/
+    last-run) — reset it around every test so tests don't leak state into
+    each other regardless of run order."""
+    research_job_mod._last_run = None
+    yield
+    research_job_mod._last_run = None
+
+
 def _candidate(title, days_from_now=3, venue="Test Venue", category="concert", url=None):
     start = now_utc() + timedelta(days=days_from_now)
     return {
@@ -247,3 +257,54 @@ def test_match_reasons_copied_onto_inserted_events(monkeypatch):
     assert result["inserted"] == 1
     inserted = result["inserted_events"][0]
     assert inserted.match_reasons == ["declared:music/folk"]
+
+
+def test_get_last_run_is_none_before_any_run():
+    assert research_job_mod.get_last_run() is None
+
+
+def test_run_records_last_run_state(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(research_job_mod, "fetch_ticketmaster_events", lambda s, window_days=21: [])
+    monkeypatch.setattr(research_job_mod, "fetch_bandsintown_events", lambda s: [])
+    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref, **kw: [_candidate("Show 1")])
+
+    research_job_mod.run_research_job(repo, triggered_by="manual")
+
+    last_run = research_job_mod.get_last_run()
+    assert last_run is not None
+    assert last_run["triggered_by"] == "manual"
+    assert last_run["inserted"] == 1
+    assert last_run["inserted_titles"] == ["Show 1"]
+    assert last_run["ballot_sent"] is False
+    assert last_run["ballot_people_notified"] == 0
+
+
+def test_run_defaults_triggered_by_to_scheduler(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(research_job_mod, "fetch_ticketmaster_events", lambda s, window_days=21: [])
+    monkeypatch.setattr(research_job_mod, "fetch_bandsintown_events", lambda s: [])
+    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref, **kw: [])
+
+    research_job_mod.run_research_job(repo)
+
+    assert research_job_mod.get_last_run()["triggered_by"] == "scheduler"
+
+
+def test_mark_ballot_sent_updates_last_run(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(research_job_mod, "fetch_ticketmaster_events", lambda s, window_days=21: [])
+    monkeypatch.setattr(research_job_mod, "fetch_bandsintown_events", lambda s: [])
+    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref, **kw: [_candidate("Show 1")])
+
+    research_job_mod.run_research_job(repo)
+    research_job_mod.mark_ballot_sent(True, people=2)
+
+    last_run = research_job_mod.get_last_run()
+    assert last_run["ballot_sent"] is True
+    assert last_run["ballot_people_notified"] == 2
+
+
+def test_mark_ballot_sent_is_noop_when_no_run_yet():
+    research_job_mod.mark_ballot_sent(True, people=2)
+    assert research_job_mod.get_last_run() is None

@@ -25,7 +25,7 @@ from app.config import get_settings
 from app.db import Repository
 from app.jobs.ballot_job import run_ballot_send_job
 from app.jobs.expiry_job import run_expiry_job
-from app.jobs.research_job import run_research_job
+from app.jobs.research_job import mark_ballot_sent, run_research_job
 from app.utils.time import PACIFIC
 
 logger = logging.getLogger("scheduler")
@@ -47,12 +47,13 @@ def research_and_ballots() -> None:
     """
     repo = Repository()
     settings = get_settings()
-    research_result = run_research_job(repo, settings)
+    research_result = run_research_job(repo, settings, triggered_by="scheduler")
     events = research_result.get("inserted_events", [])
     if not events:
         logger.info("no_new_events_skipping_ballot_send")
         return
-    run_ballot_send_job(repo, events, settings)
+    ballot_result = run_ballot_send_job(repo, events, settings)
+    mark_ballot_sent(True, ballot_result.get("people", 0))
 
 
 def calendar_write_tick() -> None:

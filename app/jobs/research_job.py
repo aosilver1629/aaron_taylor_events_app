@@ -29,6 +29,28 @@ logger = logging.getLogger("research_job")
 WINDOW_DAYS = 21
 EVENT_CAP = 12
 
+# In-memory only, deliberately — this backs GET /ops/research/last-run for a
+# lightweight "is research working" check, not a durable audit log (that's
+# what Railway's structured logs via log_job_run are for). Resets on process
+# restart/redeploy; the scheduler and API server share this process, so it
+# always reflects whichever run — cron or manual via POST /ops/research/run
+# — actually happened most recently.
+_last_run: dict | None = None
+
+
+def get_last_run() -> dict | None:
+    return _last_run
+
+
+def mark_ballot_sent(sent: bool, people: int = 0) -> None:
+    """Called by whoever sends the ballot after a research run (the
+    scheduler's research_and_ballots, or the manual endpoint when
+    send_ballot=true) — run_research_job itself never sends a ballot, so it
+    can't know this on its own."""
+    if _last_run is not None:
+        _last_run["ballot_sent"] = sent
+        _last_run["ballot_people_notified"] = people
+
 
 def _structured_context_text(structured: list[dict]) -> str:
     if not structured:
@@ -38,7 +60,9 @@ def _structured_context_text(structured: list[dict]) -> str:
     return json.dumps(structured, indent=None, default=str)
 
 
-def run_research_job(repo: Repository, settings: Settings | None = None) -> dict:
+def run_research_job(
+    repo: Repository, settings: Settings | None = None, triggered_by: str = "scheduler"
+) -> dict:
     settings = settings or get_settings()
     window_start = now_utc()
     window_end = window_start + timedelta(days=WINDOW_DAYS)
@@ -136,6 +160,7 @@ def run_research_job(repo: Repository, settings: Settings | None = None) -> dict
     log_job_run(
         logger,
         "research",
+        triggered_by=triggered_by,
         ticketmaster_found=len(ticketmaster_events),
         bandsintown_found=len(bandsintown_events),
         claude_candidates=len(raw_candidates),
@@ -146,6 +171,24 @@ def run_research_job(repo: Repository, settings: Settings | None = None) -> dict
         tag_coverage=round(tag_coverage, 2),
         dry_run=settings.dry_run,
     )
+
+    global _last_run
+    _last_run = {
+        "ran_at": now_utc().isoformat(),
+        "triggered_by": triggered_by,
+        "ticketmaster_found": len(ticketmaster_events),
+        "bandsintown_found": len(bandsintown_events),
+        "claude_candidates": len(raw_candidates),
+        "validated": len(validated),
+        "rejected": len(rejected),
+        "inserted": len(inserted),
+        "inserted_titles": [e.title for e in inserted],
+        "tagged": tagged,
+        "tag_coverage": round(tag_coverage, 2),
+        "ballot_sent": False,
+        "ballot_people_notified": 0,
+    }
+
     return {
         "ticketmaster_found": len(ticketmaster_events),
         "bandsintown_found": len(bandsintown_events),

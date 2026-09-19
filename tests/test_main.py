@@ -7,15 +7,31 @@ a real Supabase project.
 from __future__ import annotations
 
 import os
+from datetime import timedelta
 
 os.environ.setdefault("ENABLE_SCHEDULER", "false")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+import app.jobs.research_job as research_job_mod  # noqa: E402
 import app.main as main_mod  # noqa: E402
 from app.config import Settings  # noqa: E402
 from app.sms.provider import MockSMSProvider  # noqa: E402
+from app.utils.time import now_utc  # noqa: E402
 from tests.fake_repo import FakeRepository  # noqa: E402
+
+
+def _research_candidate(title: str) -> dict:
+    return {
+        "title": title,
+        "start_at": (now_utc() + timedelta(days=3)).isoformat(),
+        "venue": "Test Venue",
+        "category": "concert",
+        "price_range": "$10",
+        "url": None,
+        "pitch": "fun",
+        "source": "test",
+    }
 
 
 def _settings(**overrides) -> Settings:
@@ -226,6 +242,76 @@ def test_profile_editor_unknown_person_404():
         resp = client.get("/profile-editor/nobody")
 
     assert resp.status_code == 404
+
+
+def _patch_research_pipeline(monkeypatch, candidates):
+    monkeypatch.setattr(research_job_mod, "fetch_ticketmaster_events", lambda s, window_days=21: [])
+    monkeypatch.setattr(research_job_mod, "fetch_bandsintown_events", lambda s: [])
+    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref, **kw: candidates)
+    monkeypatch.setattr(research_job_mod, "enrich_events", lambda events, settings: None)
+
+
+def test_ops_research_run_defaults_to_no_ballot_sent(monkeypatch):
+    research_job_mod._last_run = None
+    repo = FakeRepository()
+    _patch_research_pipeline(monkeypatch, [_research_candidate("Show 1")])
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    def fail_ballot(*a, **k):
+        raise AssertionError("run_ballot_send_job should not run when send_ballot is omitted")
+
+    monkeypatch.setattr(main_mod, "run_ballot_send_job", fail_ballot)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.post("/ops/research/run")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["triggered_by"] == "manual"
+    assert body["inserted"] == 1
+    assert body["ballot_sent"] is False
+    assert repo.sms_log == []
+
+
+def test_ops_research_run_send_ballot_true_sends_and_marks(monkeypatch):
+    research_job_mod._last_run = None
+    repo = FakeRepository()
+    _patch_research_pipeline(monkeypatch, [_research_candidate("Show 1")])
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    calls = []
+
+    def fake_ballot_send(repo_arg, events, settings):
+        calls.append(len(events))
+        return {"events": len(events), "people": 2}
+
+    monkeypatch.setattr(main_mod, "run_ballot_send_job", fake_ballot_send)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.post("/ops/research/run", params={"send_ballot": "true"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert calls == [1]
+    assert body["ballot_sent"] is True
+    assert body["ballot_people_notified"] == 2
+
+
+def test_ops_research_last_run_reflects_last_call(monkeypatch):
+    research_job_mod._last_run = None
+    repo = FakeRepository()
+    _patch_research_pipeline(monkeypatch, [_research_candidate("Show 1")])
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    with TestClient(main_mod.app) as client:
+        before = client.get("/ops/research/last-run")
+        assert before.json() == {"status": "no_run_yet_this_process"}
+
+        client.post("/ops/research/run")
+        after = client.get("/ops/research/last-run")
+
+    assert after.json()["inserted"] == 1
+    assert after.json()["inserted_titles"] == ["Show 1"]
 
 
 def test_parse_profile_text_returns_draft(monkeypatch):
