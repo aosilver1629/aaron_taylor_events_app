@@ -28,3 +28,20 @@ def format_event_time(dt: datetime) -> str:
 
 def now_utc() -> datetime:
     return datetime.now(UTC)
+
+
+def parse_iso_datetime(value) -> datetime | None:
+    """Parses an ISO-8601 string (how every candidate/preview event's
+    start_at/end_at arrives, whether from Ticketmaster, Claude extraction,
+    or a client re-POSTing a previewed event), tolerating a trailing 'Z'.
+    Returns None for anything falsy or unparseable rather than raising.
+    """
+    if not value:
+        return None
+    try:
+        text = str(value)
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None

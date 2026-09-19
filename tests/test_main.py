@@ -260,14 +260,14 @@ def _patch_research_pipeline(monkeypatch, candidates):
     monkeypatch.setattr(research_job_mod, "enrich_events", lambda events, settings: None)
 
 
-def test_ops_research_run_defaults_to_no_ballot_sent(monkeypatch):
+def test_ops_research_run_never_inserts_or_sends_ballot(monkeypatch):
     research_job_mod._last_run = None
     repo = FakeRepository()
     _patch_research_pipeline(monkeypatch, [_research_candidate("Show 1")])
     monkeypatch.setattr(main_mod, "Repository", lambda: repo)
 
     def fail_ballot(*a, **k):
-        raise AssertionError("run_ballot_send_job should not run when send_ballot is omitted")
+        raise AssertionError("run_ballot_send_job should never run from a preview")
 
     monkeypatch.setattr(main_mod, "run_ballot_send_job", fail_ballot)
 
@@ -277,33 +277,89 @@ def test_ops_research_run_defaults_to_no_ballot_sent(monkeypatch):
     assert resp.status_code == 200
     body = resp.json()
     assert body["triggered_by"] == "manual"
+    assert body["persisted"] is False
     assert body["inserted"] == 1
+    assert body["inserted_titles"] == ["Show 1"]
     assert body["ballot_sent"] is False
     assert repo.sms_log == []
+    assert repo.events == {}
 
 
-def test_ops_research_run_send_ballot_true_sends_and_marks(monkeypatch):
-    research_job_mod._last_run = None
+def test_ops_events_approve_mints_and_sends_ballot(monkeypatch):
     repo = FakeRepository()
-    _patch_research_pipeline(monkeypatch, [_research_candidate("Show 1")])
     monkeypatch.setattr(main_mod, "Repository", lambda: repo)
 
     calls = []
 
     def fake_ballot_send(repo_arg, events, settings):
-        calls.append(len(events))
+        calls.append([e.title for e in events])
         return {"events": len(events), "people": 2}
 
     monkeypatch.setattr(main_mod, "run_ballot_send_job", fake_ballot_send)
 
     with TestClient(main_mod.app) as client:
-        resp = client.post("/ops/research/run", params={"send_ballot": "true"})
+        resp = client.post(
+            "/ops/events/approve",
+            json={"events": [_research_candidate("Show 1")]},
+        )
 
     assert resp.status_code == 200
     body = resp.json()
-    assert calls == [1]
+    assert calls == [["Show 1"]]
+    assert body["inserted"] == 1
+    assert body["inserted_titles"] == ["Show 1"]
     assert body["ballot_sent"] is True
     assert body["ballot_people_notified"] == 2
+    assert len(repo.events) == 1
+
+
+def test_ops_events_approve_rejects_empty_list(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    with TestClient(main_mod.app) as client:
+        resp = client.post("/ops/events/approve", json={"events": []})
+
+    assert resp.status_code == 400
+
+
+def test_ops_events_approve_rejects_missing_title(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    bad = _research_candidate("Show 1")
+    bad["title"] = ""
+
+    with TestClient(main_mod.app) as client:
+        resp = client.post("/ops/events/approve", json={"events": [bad]})
+
+    assert resp.status_code == 400
+    assert repo.events == {}
+
+
+def test_ops_events_approve_skips_duplicate_event_key(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(main_mod, "Repository", lambda: repo)
+
+    def fake_ballot_send(repo_arg, events, settings):
+        return {"events": len(events), "people": 2}
+
+    monkeypatch.setattr(main_mod, "run_ballot_send_job", fake_ballot_send)
+
+    candidate = _research_candidate("Show 1")
+
+    with TestClient(main_mod.app) as client:
+        first = client.post("/ops/events/approve", json={"events": [candidate]})
+        second = client.post("/ops/events/approve", json={"events": [candidate]})
+
+    assert first.status_code == 200
+    assert first.json()["inserted"] == 1
+    assert second.status_code == 200
+    body = second.json()
+    assert body["inserted"] == 0
+    assert body["skipped_duplicates"] == ["Show 1"]
+    assert body["ballot_sent"] is False
+    assert len(repo.events) == 1
 
 
 def test_ops_research_last_run_reflects_last_call(monkeypatch):

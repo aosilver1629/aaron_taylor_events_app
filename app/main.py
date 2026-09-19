@@ -17,14 +17,16 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from app.config import get_settings
 from app.db import Repository
 from app.jobs.ballot_job import run_ballot_send_job
-from app.jobs.research_job import get_last_run, mark_ballot_sent, run_research_job
+from app.jobs.research_job import get_last_run, run_research_job
 from app.logging_config import configure_logging
-from app.models import PEOPLE
+from app.models import EventIn, PEOPLE
+from app.research.keys import compute_event_key
 from app.research.profile_parser import parse_preference_text
 from app.research.source_registry import get_source_health
 from app.research.taxonomy import is_valid_tag
 from app.sms.provider import get_sms_provider
 from app.sms.webhook import handle_inbound_sms, verify_twilio_signature
+from app.utils.time import parse_iso_datetime
 
 configure_logging()
 logger = logging.getLogger("main")
@@ -78,30 +80,98 @@ def ops_sources(city: str = "sf") -> dict:
 
 
 @app.post("/ops/research/run")
-def ops_research_run(send_ballot: bool = False) -> dict:
-    """Manual trigger for Job 1 (research). Runs the exact same
-    run_research_job the scheduler calls every other morning, inserting
-    whatever it finds into the real `events` table — this is not a
-    sandboxed dry run.
-
-    send_ballot defaults to false: research runs and inserts events, but
-    the real SMS ballot to Aaron and Tay is NOT sent unless the caller
-    explicitly opts in with ?send_ballot=true. This lets research be
-    triggered/inspected on demand without texting anyone by accident.
+def ops_research_run() -> dict:
+    """Manual trigger for Job 1 (research), preview-only. Runs the exact
+    same pipeline the scheduler calls every other morning — real
+    Ticketmaster/Bandsintown/Claude calls, real per-URL validation, real
+    taste-profile matching — but never writes to `events` and never sends
+    a ballot; see run_research_job's `persist` docstring for why a preview
+    must not be persisted. Inspect the returned/last-run `inserted_events`
+    and, when they look right, POST that same list to
+    /ops/events/approve to actually mint them and send the real ballot.
     """
     repo = Repository()
     settings = get_settings()
-    research_result = run_research_job(repo, settings, triggered_by="manual")
-
-    if send_ballot:
-        events = research_result.get("inserted_events", [])
-        if events:
-            ballot_result = run_ballot_send_job(repo, events, settings)
-            mark_ballot_sent(True, ballot_result.get("people", 0))
-        else:
-            mark_ballot_sent(False, 0)
-
+    run_research_job(repo, settings, triggered_by="manual", persist=False)
     return get_last_run() or {"status": "no_run_yet_this_process"}
+
+
+@app.post("/ops/events/approve")
+async def ops_events_approve(request: Request) -> dict:
+    """Manual 'approve' step: takes a batch of previewed candidate events —
+    the same shape POST /ops/research/run returns, whole or trimmed down to
+    the ones actually wanted — mints them into the real `events` table, and
+    immediately sends the real SMS ballot for exactly that batch. This is
+    the only manual route that writes to `events`; testing-only for now,
+    ahead of the research -> preview -> approve -> voting UI.
+
+    Body: {"events": [{title, start_at, ...}, ...]} (same fields as
+    models.EventIn — title and start_at required, everything else optional).
+    """
+    body = await request.json()
+    raw_events = body.get("events")
+    if not isinstance(raw_events, list) or not raw_events:
+        return JSONResponse(status_code=400, content={"error": "events must be a non-empty list"})
+
+    to_insert: list[EventIn] = []
+    for raw in raw_events:
+        title = (raw.get("title") or "").strip()
+        start_at = parse_iso_datetime(raw.get("start_at"))
+        if not title or start_at is None:
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"invalid event (bad title/start_at): {raw.get('title')!r}"},
+            )
+        venue = raw.get("venue")
+        event_key = raw.get("event_key") or compute_event_key(title, start_at, venue)
+        to_insert.append(
+            EventIn(
+                event_key=event_key,
+                title=title,
+                start_at=start_at,
+                end_at=parse_iso_datetime(raw.get("end_at")),
+                venue=venue,
+                neighborhood=raw.get("neighborhood"),
+                category=raw.get("category"),
+                price_range=raw.get("price_range"),
+                url=raw.get("url"),
+                pitch=raw.get("pitch"),
+                source=raw.get("source"),
+                tags=raw.get("tags") or [],
+                entities=raw.get("entities") or [],
+                gist=raw.get("gist"),
+                tag_confidence=raw.get("tag_confidence"),
+                match_reasons=raw.get("match_reasons") or [],
+            )
+        )
+
+    repo = Repository()
+    settings = get_settings()
+
+    inserted = []
+    skipped_duplicates = []
+    for event_in in to_insert:
+        # Same event_key dedup guard as the real research pipeline — approving
+        # the same preview twice (or a preview that's since gone stale
+        # against a real run) must not create a second row for one event.
+        if repo.event_key_exists(event_in.event_key):
+            skipped_duplicates.append(event_in.title)
+            continue
+        inserted_event = repo.insert_event(event_in)
+        inserted_event.match_reasons = event_in.match_reasons
+        inserted.append(inserted_event)
+
+    ballot_result = {"events": 0, "people": 0}
+    if inserted:
+        ballot_result = run_ballot_send_job(repo, inserted, settings)
+
+    return {
+        "inserted": len(inserted),
+        "inserted_titles": [e.title for e in inserted],
+        "skipped_duplicates": skipped_duplicates,
+        "ballot_sent": bool(inserted),
+        "ballot_people_notified": ballot_result.get("people", 0),
+    }
 
 
 @app.get("/ops/research/last-run")

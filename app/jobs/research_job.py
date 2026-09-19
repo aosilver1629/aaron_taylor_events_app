@@ -3,6 +3,15 @@ in app.scheduler). Pulls Ticketmaster + Bandsintown deterministically, pulls
 a curated list of SF sources (see app.research.deterministic_search — regex-
 parsed where possible, Claude-extracted otherwise), validates every
 candidate, and caps the final list at 12.
+
+`persist` (default True) gates the one side effect on the `events` table:
+the scheduler and any real run always leave it True. Manual preview calls
+(POST /ops/research/run) pass persist=False so the pipeline runs in full —
+including real Ticketmaster/Bandsintown/Claude calls — but nothing is
+written to `events`, since event_key's uniqueness would otherwise
+permanently block a previewed-but-never-voted-on event from ever being
+found again. POST /ops/events/approve is what actually mints a previewed
+batch and sends the ballot.
 """
 from __future__ import annotations
 
@@ -61,7 +70,10 @@ def _structured_context_text(structured: list[dict]) -> str:
 
 
 def run_research_job(
-    repo: Repository, settings: Settings | None = None, triggered_by: str = "scheduler"
+    repo: Repository,
+    settings: Settings | None = None,
+    triggered_by: str = "scheduler",
+    persist: bool = True,
 ) -> dict:
     settings = settings or get_settings()
     window_start = now_utc()
@@ -143,19 +155,30 @@ def run_research_job(
     else:
         final_events = validated
 
-    inserted = []
-    for event_in in final_events:
-        try:
-            inserted_event = repo.insert_event(event_in)
-            # match_reasons is in-memory only (not a DB column — see
-            # models.EventIn.match_reasons) — insert_event's row doesn't
-            # carry it, so copy it onto the object insert_event returns.
-            inserted_event.match_reasons = event_in.match_reasons
-            inserted.append(inserted_event)
-        except Exception:
-            logger.exception(
-                "event_insert_failed", extra={"job_fields": {"event_key": event_in.event_key}}
-            )
+    if persist:
+        inserted = []
+        for event_in in final_events:
+            try:
+                inserted_event = repo.insert_event(event_in)
+                # match_reasons is in-memory only (not a DB column — see
+                # models.EventIn.match_reasons) — insert_event's row doesn't
+                # carry it, so copy it onto the object insert_event returns.
+                inserted_event.match_reasons = event_in.match_reasons
+                inserted.append(inserted_event)
+            except Exception:
+                logger.exception(
+                    "event_insert_failed", extra={"job_fields": {"event_key": event_in.event_key}}
+                )
+    else:
+        # Preview mode: nothing is written to `events`. `event_key` dedup is
+        # keyed only on "does this row already exist" (see validate_candidate),
+        # so persisting a preview would permanently burn that event out of
+        # every future real run without it ever having been offered for a
+        # vote. Return the matched EventIn objects as-is — same shape as a
+        # persisted Event minus id/discovered_at/calendar_event_id — so a
+        # caller can hand this exact list to POST /ops/events/approve to
+        # actually mint and send it.
+        inserted = list(final_events)
 
     log_job_run(
         logger,
@@ -167,6 +190,7 @@ def run_research_job(
         validated=len(validated),
         rejected=len(rejected),
         inserted=len(inserted),
+        persisted=persist,
         tagged=tagged,
         tag_coverage=round(tag_coverage, 2),
         dry_run=settings.dry_run,
@@ -183,6 +207,7 @@ def run_research_job(
         "rejected": len(rejected),
         "inserted": len(inserted),
         "inserted_titles": [e.title for e in inserted],
+        "persisted": persist,
         "tagged": tagged,
         "tag_coverage": round(tag_coverage, 2),
         "ballot_sent": False,
@@ -197,6 +222,7 @@ def run_research_job(
         "rejected": len(rejected),
         "inserted": len(inserted),
         "inserted_events": inserted,
+        "persisted": persist,
         "tagged": tagged,
         "tag_coverage": tag_coverage,
     }

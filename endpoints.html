@@ -399,6 +399,7 @@
     <a href="#ops-sources">ops/sources</a>
     <a href="#ops-research-run">ops/research/run</a>
     <a href="#ops-research-last-run">ops/research/last-run</a>
+    <a href="#ops-events-approve">ops/events/approve</a>
     <a href="#profile-get">profile/{p}</a>
     <a href="#profile-post">profile/{p}</a>
     <a href="#profile-parse">profile/{p}/parse</a>
@@ -452,17 +453,15 @@
       <div class="route-head">
         <span class="method">POST</span>
         <span class="path">/ops/research/run</span>
-        <span class="sev real">real sms possible</span>
+        <span class="sev real">real api spend</span>
       </div>
-      <p class="purpose">Manual trigger for Job&nbsp;1 (research). Runs the exact same <code>run_research_job</code> the scheduler calls every other morning &mdash; not a sandboxed dry run. Inserts whatever it finds into the real <code>events</code> table.</p>
+      <p class="purpose">Manual trigger for Job&nbsp;1 (research), preview-only. Runs the exact same pipeline the scheduler calls every other morning &mdash; real Ticketmaster/Bandsintown/Claude calls, real per-URL validation, real taste-profile matching &mdash; but never persists anything to <code>events</code> and never sends a ballot. First step of research&nbsp;&rarr;&nbsp;preview&nbsp;&rarr;&nbsp;approve&nbsp;&rarr;&nbsp;voting; see <code>/ops/events/approve</code> for the step that actually commits a batch.</p>
       <h3 class="label">Required input</h3>
-      <ul class="params">
-        <li><code>send_ballot</code> <span class="tag">query, optional</span><br>Boolean, defaults to <code>false</code>. Research always runs; the real SMS ballot only goes out to Aaron and Tay if this is explicitly <code>true</code>.</li>
-      </ul>
+      <p class="none-note">None.</p>
       <h3 class="label">Database</h3>
       <div class="mutation-block real">
-        Inserts new rows into <code>events</code> (tags/entities/gist/confidence included), records runs into <code>source_runs</code>, and reads/writes <code>taste_profiles</code> if either profile has content. Updates the in-memory state <code>GET /ops/research/last-run</code> reads back.
-        <div class="note">When <code>send_ballot=true</code>: also inserts <code>ballots</code> rows and sends a real SMS via the configured provider (logged to <code>sms_log</code>).</div>
+        Records runs into <code>source_runs</code> and reads/writes <code>taste_profiles</code> if either profile has content &mdash; but never touches <code>events</code> or <code>ballots</code>. Updates the in-memory state <code>GET /ops/research/last-run</code> reads back (with <code>persisted: false</code>).
+        <div class="note">Deliberately not a sandboxed dry run: makes real, billed Ticketmaster/Bandsintown/Claude calls and real HTTP requests to validate candidate URLs. Only the DB write is skipped &mdash; skipped specifically because <code>event_key</code>'s uniqueness would otherwise permanently block a previewed-but-never-voted-on event from ever being found again by a real run.</div>
       </div>
     </div>
   </div>
@@ -486,8 +485,29 @@
     </div>
   </div>
 
-  <div class="route" id="profile-get">
+  <div class="route" id="ops-events-approve">
     <div class="route-index">05</div>
+    <div>
+      <div class="route-head">
+        <span class="method">POST</span>
+        <span class="path">/ops/events/approve</span>
+        <span class="sev real">real sms</span>
+      </div>
+      <p class="purpose">Manual &ldquo;approve&rdquo; step: takes a batch of previewed candidate events &mdash; the same shape <code>POST /ops/research/run</code> returns, whole or trimmed down to the ones actually wanted &mdash; mints them into the real <code>events</code> table and immediately sends the real SMS ballot for exactly that batch. The only manual route that writes to <code>events</code>; testing-only for now, ahead of the eventual UI for this same step.</p>
+      <h3 class="label">Required input</h3>
+      <ul class="params">
+        <li><code>events</code> <span class="tag">body, required</span><br>Non-empty list of event objects (same fields as <code>models.EventIn</code>). Each needs a non-empty <code>title</code> and a parseable <code>start_at</code>, else <code>400</code> and nothing is written.</li>
+      </ul>
+      <h3 class="label">Database</h3>
+      <div class="mutation-block real">
+        Inserts one row per event into <code>events</code>, then inserts the matching <code>ballots</code> rows and sends a real SMS to Aaron and Tay via the configured provider (logged to <code>sms_log</code>).
+        <div class="note">Skips (does not error on) any event whose <code>event_key</code> already exists in <code>events</code> &mdash; approving the same preview twice, or one that's since been superseded by a real run, creates no duplicate row. See <code>skipped_duplicates</code> in the response.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="route" id="profile-get">
+    <div class="route-index">06</div>
     <div>
       <div class="route-head">
         <span class="method">GET</span>
@@ -507,7 +527,7 @@
   </div>
 
   <div class="route" id="profile-post">
-    <div class="route-index">06</div>
+    <div class="route-index">07</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -531,7 +551,7 @@
   </div>
 
   <div class="route" id="profile-parse">
-    <div class="route-index">07</div>
+    <div class="route-index">08</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -552,7 +572,7 @@
   </div>
 
   <div class="route" id="profile-editor">
-    <div class="route-index">08</div>
+    <div class="route-index">09</div>
     <div>
       <div class="route-head">
         <span class="method">GET</span>
@@ -570,7 +590,7 @@
   </div>
 
   <div class="route" id="sms">
-    <div class="route-index">09</div>
+    <div class="route-index">10</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -600,7 +620,7 @@
     </div>
   </div>
 
-  <footer>app/main.py &middot; 9 routes &middot; kept current by hand</footer>
+  <footer>app/main.py &middot; 10 routes &middot; kept current by hand</footer>
 </div>
 </body>
 </html>

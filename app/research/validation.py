@@ -14,6 +14,7 @@ from app.db import Repository
 from app.models import EventIn
 from app.research.keys import compute_event_key
 from app.utils.retry import with_retry
+from app.utils.time import parse_iso_datetime
 
 logger = logging.getLogger("event_validation")
 
@@ -25,18 +26,6 @@ class ValidationResult:
     ok: bool
     reason: str | None = None
     event: EventIn | None = None
-
-
-def _parse_start_at(value) -> datetime | None:
-    if not value:
-        return None
-    try:
-        text = str(value)
-        if text.endswith("Z"):
-            text = text[:-1] + "+00:00"
-        return datetime.fromisoformat(text)
-    except ValueError:
-        return None
 
 
 def _url_returns_2xx(url: str) -> bool:
@@ -63,7 +52,7 @@ def validate_candidate(
     if not title or len(title) > MAX_TITLE_LEN:
         return ValidationResult(False, f"invalid title: {title!r}")
 
-    start_at = _parse_start_at(raw.get("start_at"))
+    start_at = parse_iso_datetime(raw.get("start_at"))
     if start_at is None:
         return ValidationResult(False, "start_at does not parse")
     if not (window_start <= start_at <= window_end):
@@ -80,7 +69,7 @@ def validate_candidate(
     if repo.event_key_exists(event_key):
         return ValidationResult(False, "duplicate of existing event")
 
-    end_at = _parse_start_at(raw.get("end_at"))
+    end_at = parse_iso_datetime(raw.get("end_at"))
 
     event = EventIn(
         event_key=event_key,

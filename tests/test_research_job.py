@@ -308,3 +308,46 @@ def test_mark_ballot_sent_updates_last_run(monkeypatch):
 def test_mark_ballot_sent_is_noop_when_no_run_yet():
     research_job_mod.mark_ballot_sent(True, people=2)
     assert research_job_mod.get_last_run() is None
+
+
+def test_persist_false_does_not_write_to_events(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(research_job_mod, "fetch_ticketmaster_events", lambda s, window_days=21: [])
+    monkeypatch.setattr(research_job_mod, "fetch_bandsintown_events", lambda s: [])
+    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref, **kw: [_candidate("Show 1")])
+
+    result = research_job_mod.run_research_job(repo, persist=False)
+
+    assert result["persisted"] is False
+    assert result["inserted"] == 1
+    assert result["inserted_events"][0].title == "Show 1"
+    assert repo.events == {}
+
+
+def test_persist_false_still_records_last_run(monkeypatch):
+    repo = FakeRepository()
+    monkeypatch.setattr(research_job_mod, "fetch_ticketmaster_events", lambda s, window_days=21: [])
+    monkeypatch.setattr(research_job_mod, "fetch_bandsintown_events", lambda s: [])
+    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref, **kw: [_candidate("Show 1")])
+
+    research_job_mod.run_research_job(repo, persist=False, triggered_by="manual")
+
+    last_run = research_job_mod.get_last_run()
+    assert last_run["persisted"] is False
+    assert last_run["inserted"] == 1
+    assert last_run["inserted_titles"] == ["Show 1"]
+    assert repo.events == {}
+
+
+def test_persist_true_is_still_the_default(monkeypatch):
+    """The scheduler's automatic path never passes persist explicitly —
+    it must keep inserting for real."""
+    repo = FakeRepository()
+    monkeypatch.setattr(research_job_mod, "fetch_ticketmaster_events", lambda s, window_days=21: [])
+    monkeypatch.setattr(research_job_mod, "fetch_bandsintown_events", lambda s: [])
+    monkeypatch.setattr(research_job_mod, "run_research_call", lambda ctx, pref, **kw: [_candidate("Show 1")])
+
+    result = research_job_mod.run_research_job(repo)
+
+    assert result["persisted"] is True
+    assert len(repo.events) == 1
