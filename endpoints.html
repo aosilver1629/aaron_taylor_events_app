@@ -395,6 +395,7 @@
   </header>
 
   <nav class="jump" aria-label="Jump to route">
+    <a href="#index">/</a>
     <a href="#health">health</a>
     <a href="#admin">admin</a>
     <a href="#ops-sources">ops/sources</a>
@@ -416,8 +417,24 @@
     <span><span class="swatch real"></span> real SMS sent or real API spend</span>
   </p>
 
-  <div class="route" id="health">
+  <div class="route" id="index">
     <div class="route-index">01</div>
+    <div>
+      <div class="route-head">
+        <span class="method">GET</span>
+        <span class="path">/</span>
+        <span class="sev read">no mutation</span>
+      </div>
+      <p class="purpose">No landing page of its own &mdash; redirects a browser straight to <code>/admin</code>'s first tab. Nothing sits in front of this or <code>/admin</code> yet (no auth); a known, deliberate gap for now, not an oversight.</p>
+      <h3 class="label">Required input</h3>
+      <p class="none-note">None.</p>
+      <h3 class="label">Database</h3>
+      <div class="mutation-block read">None &mdash; a 307 redirect, nothing else.</div>
+    </div>
+  </div>
+
+  <div class="route" id="health">
+    <div class="route-index">02</div>
     <div>
       <div class="route-head">
         <span class="method">GET</span>
@@ -433,7 +450,7 @@
   </div>
 
   <div class="route" id="admin">
-    <div class="route-index">02</div>
+    <div class="route-index">03</div>
     <div>
       <div class="route-head">
         <span class="method">GET</span>
@@ -449,7 +466,7 @@
   </div>
 
   <div class="route" id="ops-sources">
-    <div class="route-index">03</div>
+    <div class="route-index">04</div>
     <div>
       <div class="route-head">
         <span class="method">GET</span>
@@ -469,7 +486,7 @@
   </div>
 
   <div class="route" id="ops-sources-create">
-    <div class="route-index">04</div>
+    <div class="route-index">05</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -493,7 +510,7 @@
   </div>
 
   <div class="route" id="ops-sources-update">
-    <div class="route-index">05</div>
+    <div class="route-index">06</div>
     <div>
       <div class="route-head">
         <span class="method">PATCH</span>
@@ -512,7 +529,7 @@
   </div>
 
   <div class="route" id="ops-research-run">
-    <div class="route-index">06</div>
+    <div class="route-index">07</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -531,7 +548,7 @@
   </div>
 
   <div class="route" id="ops-research-last-run">
-    <div class="route-index">07</div>
+    <div class="route-index">08</div>
     <div>
       <div class="route-head">
         <span class="method">GET</span>
@@ -550,7 +567,7 @@
   </div>
 
   <div class="route" id="ops-events-approve">
-    <div class="route-index">08</div>
+    <div class="route-index">09</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -571,7 +588,7 @@
   </div>
 
   <div class="route" id="profile-get">
-    <div class="route-index">09</div>
+    <div class="route-index">10</div>
     <div>
       <div class="route-head">
         <span class="method">GET</span>
@@ -591,7 +608,7 @@
   </div>
 
   <div class="route" id="profile-post">
-    <div class="route-index">10</div>
+    <div class="route-index">11</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -615,7 +632,7 @@
   </div>
 
   <div class="route" id="profile-parse">
-    <div class="route-index">11</div>
+    <div class="route-index">12</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -636,7 +653,7 @@
   </div>
 
   <div class="route" id="profile-editor">
-    <div class="route-index">12</div>
+    <div class="route-index">13</div>
     <div>
       <div class="route-head">
         <span class="method">GET</span>
@@ -654,7 +671,7 @@
   </div>
 
   <div class="route" id="sms">
-    <div class="route-index">13</div>
+    <div class="route-index">14</div>
     <div>
       <div class="route-head">
         <span class="method">POST</span>
@@ -684,7 +701,7 @@
     </div>
   </div>
 
-  <footer>app/main.py &middot; 13 routes &middot; kept current by hand</footer>
+  <footer>app/main.py &middot; 14 routes &middot; kept current by hand</footer>
 </div>
 </body>
 </html>

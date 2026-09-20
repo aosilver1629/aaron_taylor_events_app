@@ -53,6 +53,13 @@ def test_health():
     assert resp.json() == {"status": "ok"}
 
 
+def test_index_redirects_to_admin():
+    with TestClient(main_mod.app, follow_redirects=False) as client:
+        resp = client.get("/")
+    assert resp.status_code in (302, 307)
+    assert resp.headers["location"] == "/admin"
+
+
 def test_endpoints_doc_serves_html():
     with TestClient(main_mod.app) as client:
         resp = client.get("/endpoints")

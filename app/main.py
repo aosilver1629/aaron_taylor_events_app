@@ -13,7 +13,7 @@ from pathlib import Path
 from uuid import UUID
 
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.config import get_settings
 from app.db import Repository
@@ -55,6 +55,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="SF Events Voting Workflow", lifespan=lifespan)
+
+
+@app.get("/", include_in_schema=False)
+def index() -> RedirectResponse:
+    """No landing page of its own yet — sends a browser straight to the
+    admin app's first tab. No auth in front of this (or /admin) yet; that's
+    a deliberate, known gap, not an oversight, and comes later."""
+    return RedirectResponse(url="/admin")
 
 
 @app.get("/health")
