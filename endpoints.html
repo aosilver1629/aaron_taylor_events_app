@@ -536,12 +536,12 @@
         <span class="path">/ops/research/run</span>
         <span class="sev real">real api spend</span>
       </div>
-      <p class="purpose">Manual trigger for Job&nbsp;1 (research), preview-only. Runs the exact same pipeline the scheduler calls every other morning &mdash; real Ticketmaster/Bandsintown/Claude calls, real per-URL validation, real taste-profile matching &mdash; but never persists anything to <code>events</code> and never sends a ballot. First step of research&nbsp;&rarr;&nbsp;preview&nbsp;&rarr;&nbsp;approve&nbsp;&rarr;&nbsp;voting; see <code>/ops/events/approve</code> for the step that actually commits a batch.</p>
+      <p class="purpose">Manual trigger for Job&nbsp;1 (research), preview-only. Kicks off the exact same pipeline the scheduler calls every other morning &mdash; real Ticketmaster/Bandsintown/Claude calls, real per-URL validation, real taste-profile matching &mdash; but never persists anything to <code>events</code> and never sends a ballot. <strong>Runs as a background task and returns immediately</strong> with <code>status: "running"</code>; the pipeline routinely takes 2&ndash;3 minutes, too long to hold a request open reliably on a mobile connection (this used to be synchronous and mobile clients were timing out and closing the connection &mdash; 499s &mdash; before the response could be sent, even though the run itself succeeded server-side). Poll <code>GET /ops/research/last-run</code> until <code>status</code> is <code>"done"</code>. First step of research&nbsp;&rarr;&nbsp;preview&nbsp;&rarr;&nbsp;approve&nbsp;&rarr;&nbsp;voting; see <code>/ops/events/approve</code> for the step that actually commits a batch.</p>
       <h3 class="label">Required input</h3>
       <p class="none-note">None.</p>
       <h3 class="label">Database</h3>
       <div class="mutation-block real">
-        Records runs into <code>source_runs</code> and reads/writes <code>taste_profiles</code> if either profile has content &mdash; but never touches <code>events</code> or <code>ballots</code>. Updates the in-memory state <code>GET /ops/research/last-run</code> reads back (with <code>persisted: false</code>).
+        Once the background task runs: records runs into <code>source_runs</code> and reads/writes <code>taste_profiles</code> if either profile has content &mdash; but never touches <code>events</code> or <code>ballots</code>. Updates the in-memory state <code>GET /ops/research/last-run</code> reads back (<code>status: "running"</code> &rarr; <code>"done"</code> with <code>persisted: false</code>, or <code>"error"</code> on an uncaught exception).
         <div class="note">Deliberately not a sandboxed dry run: makes real, billed Ticketmaster/Bandsintown/Claude calls and real HTTP requests to validate candidate URLs. Only the DB write is skipped &mdash; skipped specifically because <code>event_key</code>'s uniqueness would otherwise permanently block a previewed-but-never-voted-on event from ever being found again by a real run.</div>
       </div>
     </div>
@@ -555,7 +555,7 @@
         <span class="path">/ops/research/last-run</span>
         <span class="sev read">no mutation</span>
       </div>
-      <p class="purpose">Status and summary of the most recent research run in the current process &mdash; scheduler-triggered or manual. A lightweight &ldquo;did the last run work, and what did it find&rdquo; check.</p>
+      <p class="purpose">Status and summary of the most recent research run in the current process &mdash; scheduler-triggered or manual. Also the polling target for the async <code>POST /ops/research/run</code>: <code>status</code> is <code>"running"</code> (just kicked off, no result yet), <code>"done"</code> (full stats + <code>inserted_events</code>, the same shape the POST response used to return inline), or <code>"error"</code> (see <code>error</code>).</p>
       <h3 class="label">Required input</h3>
       <p class="none-note">None.</p>
       <h3 class="label">Database</h3>

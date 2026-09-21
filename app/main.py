@@ -12,13 +12,18 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import FastAPI, Request, Response
+from fastapi import BackgroundTasks, FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.config import get_settings
 from app.db import Repository
 from app.jobs.ballot_job import run_ballot_send_job
-from app.jobs.research_job import get_last_run, run_research_job
+from app.jobs.research_job import (
+    get_last_run,
+    mark_run_failed,
+    mark_run_started,
+    run_research_job,
+)
 from app.logging_config import configure_logging
 from app.models import EventIn, PEOPLE
 from app.research.deterministic_search import KNOWN_PARSER_IDS
@@ -200,21 +205,43 @@ async def ops_sources_update(source_id: str, request: Request) -> dict:
     return updated
 
 
+def _run_research_background() -> None:
+    """The actual pipeline (real Ticketmaster/Bandsintown/Claude calls, real
+    per-URL validation) routinely takes 2-3 minutes — long enough that a
+    mobile browser's own connection/idle timeout can close the request out
+    from under it before the response ever gets sent (see the 499s in
+    Railway's HTTP logs). Runs as a FastAPI background task instead, so the
+    POST that kicks it off can return immediately and the caller polls
+    GET /ops/research/last-run for status/results."""
+    try:
+        repo = Repository()
+        settings = get_settings()
+        run_research_job(repo, settings, triggered_by="manual", persist=False)
+    except Exception as exc:
+        logger.exception("research_run_failed")
+        mark_run_failed("manual", str(exc))
+
+
 @app.post("/ops/research/run")
-def ops_research_run() -> dict:
-    """Manual trigger for Job 1 (research), preview-only. Runs the exact
-    same pipeline the scheduler calls every other morning — real
+def ops_research_run(background_tasks: BackgroundTasks) -> dict:
+    """Manual trigger for Job 1 (research), preview-only. Kicks off the same
+    pipeline the scheduler calls every other morning — real
     Ticketmaster/Bandsintown/Claude calls, real per-URL validation, real
     taste-profile matching — but never writes to `events` and never sends
     a ballot; see run_research_job's `persist` docstring for why a preview
-    must not be persisted. Inspect the returned/last-run `inserted_events`
-    and, when they look right, POST that same list to
-    /ops/events/approve to actually mint them and send the real ballot.
+    must not be persisted.
+
+    Runs in the background and returns immediately with status="running";
+    the pipeline routinely takes 2-3 minutes, too long to hold a request
+    open reliably (see _run_research_background). Poll
+    GET /ops/research/last-run until status is "done" (or "error"), then
+    inspect its `inserted_events` and, when they look right, POST that same
+    list to /ops/events/approve to actually mint them and send the real
+    ballot.
     """
-    repo = Repository()
-    settings = get_settings()
-    run_research_job(repo, settings, triggered_by="manual", persist=False)
-    return get_last_run() or {"status": "no_run_yet_this_process"}
+    mark_run_started("manual")
+    background_tasks.add_task(_run_research_background)
+    return get_last_run()
 
 
 @app.post("/ops/events/approve")
@@ -298,9 +325,11 @@ async def ops_events_approve(request: Request) -> dict:
 @app.get("/ops/research/last-run")
 def ops_research_last_run() -> dict:
     """Status + result of the most recent research run in this process
-    (cron-triggered or manual via POST /ops/research/run). In-memory only
-    — resets on redeploy/restart; see run_research_job's module docstring
-    for why that tradeoff is fine here."""
+    (cron-triggered or manual via POST /ops/research/run). `status` is one
+    of "running" (POST just kicked it off, no result yet), "done" (full
+    stats + inserted_events below), or "error" (see `error`). In-memory
+    only — resets on redeploy/restart; see run_research_job's module
+    docstring for why that tradeoff is fine here."""
     return get_last_run() or {"status": "no_run_yet_this_process"}
 
 

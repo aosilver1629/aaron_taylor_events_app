@@ -675,6 +675,22 @@ function updateApproveBar() {
   bar.classList.toggle("show", selected.size > 0);
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// The pipeline routinely takes 2-3 minutes (real Ticketmaster/Bandsintown/
+// Claude calls + per-URL validation) — too long to hold the POST open on a
+// mobile connection, so it runs as a background task server-side and this
+// polls GET /ops/research/last-run for the result instead.
+async function pollResearchRun() {
+  while (true) {
+    await sleep(2000);
+    const last = await apiGet("/ops/research/last-run");
+    if (last.status !== "running") return last;
+  }
+}
+
 document.getElementById("run-research-btn").addEventListener("click", async () => {
   const btn = document.getElementById("run-research-btn");
   const bannerEl = document.getElementById("research-banner");
@@ -684,7 +700,11 @@ document.getElementById("run-research-btn").addEventListener("click", async () =
   selected = new Set();
   updateApproveBar();
   try {
-    const last = await apiPost("/ops/research/run", {});
+    await apiPost("/ops/research/run", {});
+    const last = await pollResearchRun();
+    if (last.status === "error") {
+      throw new Error(last.error || "research run failed");
+    }
     previewEvents = last.inserted_events || [];
     renderResearchStats(last);
     renderEventCards();
@@ -731,7 +751,10 @@ document.getElementById("approve-btn").addEventListener("click", async () => {
 (async function initResearchLastRun() {
   try {
     const last = await apiGet("/ops/research/last-run");
-    if (last && last.status !== "no_run_yet_this_process" && last.persisted === false) {
+    if (last.status === "running") {
+      banner(document.getElementById("research-banner"),
+        "A research run is still in progress — reload in a bit to see results.", "warn");
+    } else if (last.status === "done" && last.persisted === false) {
       previewEvents = []; // last-run doesn't carry full event objects back across a page load
       renderResearchStats(last);
     }

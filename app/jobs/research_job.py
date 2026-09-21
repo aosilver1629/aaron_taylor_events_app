@@ -51,6 +51,32 @@ def get_last_run() -> dict | None:
     return _last_run
 
 
+def mark_run_started(triggered_by: str) -> None:
+    """Called synchronously by POST /ops/research/run before it hands the
+    actual pipeline off to a background task, so a client polling
+    GET /ops/research/last-run immediately after the POST returns sees
+    status="running" rather than stale data from a previous run."""
+    global _last_run
+    _last_run = {
+        "status": "running",
+        "triggered_by": triggered_by,
+        "started_at": now_utc().isoformat(),
+    }
+
+
+def mark_run_failed(triggered_by: str, error: str) -> None:
+    """Called by the background task on an uncaught exception — without
+    this, a failed run would leave _last_run stuck on status="running"
+    forever, since run_research_job itself never gets to overwrite it."""
+    global _last_run
+    _last_run = {
+        "status": "error",
+        "triggered_by": triggered_by,
+        "error": error,
+        "failed_at": now_utc().isoformat(),
+    }
+
+
 def mark_ballot_sent(sent: bool, people: int = 0) -> None:
     """Called by whoever sends the ballot after a research run (the
     scheduler's research_and_ballots, or the manual endpoint when
@@ -198,6 +224,7 @@ def run_research_job(
 
     global _last_run
     _last_run = {
+        "status": "done",
         "ran_at": now_utc().isoformat(),
         "triggered_by": triggered_by,
         "ticketmaster_found": len(ticketmaster_events),
@@ -207,6 +234,12 @@ def run_research_job(
         "rejected": len(rejected),
         "inserted": len(inserted),
         "inserted_titles": [e.title for e in inserted],
+        # Full event objects, not just titles — the manual-trigger flow is
+        # now async (POST /ops/research/run kicks this off and returns
+        # immediately), so the admin UI polls this endpoint to get the same
+        # inserted_events payload it used to read straight off the POST
+        # response, and needs the full objects to render/approve cards.
+        "inserted_events": inserted,
         "persisted": persist,
         "tagged": tagged,
         "tag_coverage": round(tag_coverage, 2),

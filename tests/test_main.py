@@ -416,14 +416,19 @@ def test_ops_research_run_never_inserts_or_sends_ballot(monkeypatch):
 
     with TestClient(main_mod.app) as client:
         resp = client.post("/ops/research/run")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "running"
 
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["triggered_by"] == "manual"
-    assert body["persisted"] is False
-    assert body["inserted"] == 1
-    assert body["inserted_titles"] == ["Show 1"]
-    assert body["ballot_sent"] is False
+        # TestClient runs FastAPI background tasks to completion before the
+        # request call returns, so the job has already finished by here.
+        last_run = client.get("/ops/research/last-run").json()
+
+    assert last_run["status"] == "done"
+    assert last_run["triggered_by"] == "manual"
+    assert last_run["persisted"] is False
+    assert last_run["inserted"] == 1
+    assert last_run["inserted_titles"] == ["Show 1"]
+    assert last_run["ballot_sent"] is False
     assert repo.sms_log == []
     assert repo.events == {}
 
